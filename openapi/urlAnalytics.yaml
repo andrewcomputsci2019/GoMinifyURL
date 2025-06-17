@@ -1,0 +1,165 @@
+openapi: 3.0.4
+info:
+  title: GoMinifyURL analytics API
+  description: Analytics api for GoMinifyURL. Uses KeyCloak for auth
+  version: 1.0.0
+servers:
+  - url: https://{hostname}/analytics/
+    variables:
+      hostname:
+        default: localhost
+paths:
+  /url/{shortId}/stats:
+    get:
+      summary: Get detailed analytics for a shortened URL
+      description: |
+        Returns geo and referral breakdowns for a single short URL.
+        Only accessible by the owner of the URL.
+      operationId: getDetailedUrlStats
+      security:
+        - keycloakOAuth: [openid]
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shortId:
+                    type: string
+                  totalClicks:
+                    type: integer
+                  clicksByCountry:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        country:
+                          type: string
+                        count:
+                          type: integer
+                  referrals:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        referrer:
+                          type: string
+                        count:
+                          type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden – user does not own the URL
+        '404':
+          description: URL not found
+  /user/top:
+    get:
+      summary: Get top K most-clicked short URLs for the authenticated user
+      description: |
+        Returns a ranked list of the authenticated user's most-clicked short URLs.
+        You can specify how many to return using the `limit` parameter (maximum: 20).
+      operationId: getUserTopUrls
+      security:
+        - keycloakOAuth: [openid]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 20
+          description: |
+            Number of top URLs to return (default: 10, max: 20)
+      responses:
+        '200':
+          description: Top K user URLs by click count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    shortId:
+                      type: string
+                    clickCount:
+                      type: integer
+        '401':
+          description: Unauthorized
+  /user/referrals:
+    get:
+      summary: Get referral graph for authenticated user's short URLs
+      description: |
+        Returns a graph of referrer → short URL relationships for the current user's links.
+        Each item indicates how many users visited a given short link from a specific referrer.
+      operationId: getUserReferralGraph
+      security:
+        - keycloakOAuth: [openid]
+      responses:
+        '200':
+          description: Referral graph data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    shortId:
+                      type: string
+                    referrer:
+                      type: string
+                    count:
+                      type: integer
+        '401':
+          description: Unauthorized
+  /user/geo:
+    get:
+      summary: Get country-level click summary for authenticated user's links
+      description: |
+        Returns a breakdown of click counts by country across all of the user's shortened URLs.
+        Useful for visualizing audience location (e.g., heatmap or pie chart).
+      operationId: getUserGeoSummary
+      security:
+        - keycloakOAuth: [openid]
+      responses:
+        '200':
+          description: Country-level click summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      description: Two-letter country code (ISO 3166-1 alpha-2)
+                    count:
+                      type: integer
+                      description: Number of clicks from this country
+        '401':
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    keycloakOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://keycloak.example.com/realms/gominify/protocol/openid-connect/auth
+          tokenUrl: https://keycloak.example.com/realms/gominify/protocol/openid-connect/token
+          scopes:
+            openid: OpenID Connect basic authentication
+
+security:
+  - keycloakOAuth: [openid]

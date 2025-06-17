@@ -1,0 +1,77 @@
+openapi: 3.0.4
+info:
+  title: GoMinifyURL Shorter API
+  version: 1.0.0
+  description: |
+    A minimal URL shortening service. Uses Keycloak for authentication.
+
+servers:
+  - url: https://{hostname}/api
+    variables:
+      hostname:
+        default: localhost
+
+paths:
+  /shrink:
+    post:
+      summary: Shorten a URL
+      description: Authenticated users can shorten a long URL.
+      operationId: shrinkUrl
+      security:
+        - keycloakOAuth: [openid]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Shortened URL created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  short_url:
+                    type: string
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid input
+
+  /:
+    get:
+      summary: Redirect to long URL
+      description: Public endpoint that redirects users from a short slug.
+      operationId: redirect
+      parameters:
+        - in: query
+          name: url
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to original URL
+        '404':
+          description: Not found
+
+components:
+  securitySchemes:
+    keycloakOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://keycloak.example.com/realms/gominifyurl/protocol/openid-connect/auth
+          tokenUrl: https://keycloak.example.com/realms/gominifyurl/protocol/openid-connect/token
+          scopes:
+            openid: Access your identity
+
+security:
+  - keycloakOAuth: [openid]  # Optional: Global security, or only per-route
