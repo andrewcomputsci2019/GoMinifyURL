@@ -11,6 +11,12 @@ type StorageServer struct {
 	proto.UnimplementedURLStorageServer
 }
 
+func NewStorageServer(db *pgxpool.Pool) *StorageServer {
+	return &StorageServer{
+		db: db,
+	}
+}
+
 func (s StorageServer) PutURL(ctx context.Context, request *proto.ShortURLRequest) (*proto.ShortUrlResponse, error) {
 	//TODO implement me
 	panic("implement me")
