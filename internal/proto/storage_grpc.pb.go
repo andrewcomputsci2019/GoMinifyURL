@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,101 +19,139 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Empty_BlankRequest_FullMethodName = "/empty/blankRequest"
+	URLStorage_PutURL_FullMethodName     = "/URLStorage/putURL"
+	URLStorage_GetFullURL_FullMethodName = "/URLStorage/getFullURL"
 )
 
-// EmptyClient is the client API for Empty service.
+// URLStorageClient is the client API for URLStorage service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type EmptyClient interface {
-	BlankRequest(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+type URLStorageClient interface {
+	PutURL(ctx context.Context, in *ShortURLRequest, opts ...grpc.CallOption) (*ShortUrlResponse, error)
+	GetFullURL(ctx context.Context, in *FullUrlRequest, opts ...grpc.CallOption) (*FullUrlResponse, error)
 }
 
-type emptyClient struct {
+type uRLStorageClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewEmptyClient(cc grpc.ClientConnInterface) EmptyClient {
-	return &emptyClient{cc}
+func NewURLStorageClient(cc grpc.ClientConnInterface) URLStorageClient {
+	return &uRLStorageClient{cc}
 }
 
-func (c *emptyClient) BlankRequest(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *uRLStorageClient) PutURL(ctx context.Context, in *ShortURLRequest, opts ...grpc.CallOption) (*ShortUrlResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, Empty_BlankRequest_FullMethodName, in, out, cOpts...)
+	out := new(ShortUrlResponse)
+	err := c.cc.Invoke(ctx, URLStorage_PutURL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// EmptyServer is the server API for Empty service.
-// All implementations must embed UnimplementedEmptyServer
-// for forward compatibility.
-type EmptyServer interface {
-	BlankRequest(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	mustEmbedUnimplementedEmptyServer()
+func (c *uRLStorageClient) GetFullURL(ctx context.Context, in *FullUrlRequest, opts ...grpc.CallOption) (*FullUrlResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FullUrlResponse)
+	err := c.cc.Invoke(ctx, URLStorage_GetFullURL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-// UnimplementedEmptyServer must be embedded to have
+// URLStorageServer is the server API for URLStorage service.
+// All implementations must embed UnimplementedURLStorageServer
+// for forward compatibility.
+type URLStorageServer interface {
+	PutURL(context.Context, *ShortURLRequest) (*ShortUrlResponse, error)
+	GetFullURL(context.Context, *FullUrlRequest) (*FullUrlResponse, error)
+	mustEmbedUnimplementedURLStorageServer()
+}
+
+// UnimplementedURLStorageServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedEmptyServer struct{}
+type UnimplementedURLStorageServer struct{}
 
-func (UnimplementedEmptyServer) BlankRequest(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BlankRequest not implemented")
+func (UnimplementedURLStorageServer) PutURL(context.Context, *ShortURLRequest) (*ShortUrlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PutURL not implemented")
 }
-func (UnimplementedEmptyServer) mustEmbedUnimplementedEmptyServer() {}
-func (UnimplementedEmptyServer) testEmbeddedByValue()               {}
+func (UnimplementedURLStorageServer) GetFullURL(context.Context, *FullUrlRequest) (*FullUrlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFullURL not implemented")
+}
+func (UnimplementedURLStorageServer) mustEmbedUnimplementedURLStorageServer() {}
+func (UnimplementedURLStorageServer) testEmbeddedByValue()                    {}
 
-// UnsafeEmptyServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to EmptyServer will
+// UnsafeURLStorageServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to URLStorageServer will
 // result in compilation errors.
-type UnsafeEmptyServer interface {
-	mustEmbedUnimplementedEmptyServer()
+type UnsafeURLStorageServer interface {
+	mustEmbedUnimplementedURLStorageServer()
 }
 
-func RegisterEmptyServer(s grpc.ServiceRegistrar, srv EmptyServer) {
-	// If the following call pancis, it indicates UnimplementedEmptyServer was
+func RegisterURLStorageServer(s grpc.ServiceRegistrar, srv URLStorageServer) {
+	// If the following call pancis, it indicates UnimplementedURLStorageServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&Empty_ServiceDesc, srv)
+	s.RegisterService(&URLStorage_ServiceDesc, srv)
 }
 
-func _Empty_BlankRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
+func _URLStorage_PutURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShortURLRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(EmptyServer).BlankRequest(ctx, in)
+		return srv.(URLStorageServer).PutURL(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Empty_BlankRequest_FullMethodName,
+		FullMethod: URLStorage_PutURL_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EmptyServer).BlankRequest(ctx, req.(*emptypb.Empty))
+		return srv.(URLStorageServer).PutURL(ctx, req.(*ShortURLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Empty_ServiceDesc is the grpc.ServiceDesc for Empty service.
+func _URLStorage_GetFullURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FullUrlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(URLStorageServer).GetFullURL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: URLStorage_GetFullURL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(URLStorageServer).GetFullURL(ctx, req.(*FullUrlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// URLStorage_ServiceDesc is the grpc.ServiceDesc for URLStorage service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Empty_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "empty",
-	HandlerType: (*EmptyServer)(nil),
+var URLStorage_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "URLStorage",
+	HandlerType: (*URLStorageServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "blankRequest",
-			Handler:    _Empty_BlankRequest_Handler,
+			MethodName: "putURL",
+			Handler:    _URLStorage_PutURL_Handler,
+		},
+		{
+			MethodName: "getFullURL",
+			Handler:    _URLStorage_GetFullURL_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

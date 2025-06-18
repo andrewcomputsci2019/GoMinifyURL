@@ -9,9 +9,10 @@ package proto
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	_ "google.golang.org/protobuf/types/known/emptypb"
 	_ "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
+	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -22,22 +23,247 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ShortURLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OriginalUrl   string                 `protobuf:"bytes,1,opt,name=original_url,json=originalUrl,proto3" json:"original_url,omitempty"` // original url that is being compressed down
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                // user id that this url should be assigned to
+	UrlAlias      *string                `protobuf:"bytes,3,opt,name=url_alias,json=urlAlias,proto3,oneof" json:"url_alias,omitempty"`    // pre-fab url user requested, if not present auto-generated
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShortURLRequest) Reset() {
+	*x = ShortURLRequest{}
+	mi := &file_storage_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShortURLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShortURLRequest) ProtoMessage() {}
+
+func (x *ShortURLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShortURLRequest.ProtoReflect.Descriptor instead.
+func (*ShortURLRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ShortURLRequest) GetOriginalUrl() string {
+	if x != nil {
+		return x.OriginalUrl
+	}
+	return ""
+}
+
+func (x *ShortURLRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ShortURLRequest) GetUrlAlias() string {
+	if x != nil && x.UrlAlias != nil {
+		return *x.UrlAlias
+	}
+	return ""
+}
+
+type ShortUrlResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShortUrl      string                 `protobuf:"bytes,1,opt,name=short_url,json=shortUrl,proto3" json:"short_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShortUrlResponse) Reset() {
+	*x = ShortUrlResponse{}
+	mi := &file_storage_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShortUrlResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShortUrlResponse) ProtoMessage() {}
+
+func (x *ShortUrlResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShortUrlResponse.ProtoReflect.Descriptor instead.
+func (*ShortUrlResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ShortUrlResponse) GetShortUrl() string {
+	if x != nil {
+		return x.ShortUrl
+	}
+	return ""
+}
+
+type FullUrlRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShortUrl      string                 `protobuf:"bytes,1,opt,name=short_url,json=shortUrl,proto3" json:"short_url,omitempty"` // the short_url to reverse lookup
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FullUrlRequest) Reset() {
+	*x = FullUrlRequest{}
+	mi := &file_storage_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FullUrlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FullUrlRequest) ProtoMessage() {}
+
+func (x *FullUrlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FullUrlRequest.ProtoReflect.Descriptor instead.
+func (*FullUrlRequest) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *FullUrlRequest) GetShortUrl() string {
+	if x != nil {
+		return x.ShortUrl
+	}
+	return ""
+}
+
+type FullUrlResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FullUrl       string                 `protobuf:"bytes,1,opt,name=full_url,json=fullUrl,proto3" json:"full_url,omitempty"` // the full_url mapped to the short_url that was provided
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FullUrlResponse) Reset() {
+	*x = FullUrlResponse{}
+	mi := &file_storage_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FullUrlResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FullUrlResponse) ProtoMessage() {}
+
+func (x *FullUrlResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FullUrlResponse.ProtoReflect.Descriptor instead.
+func (*FullUrlResponse) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *FullUrlResponse) GetFullUrl() string {
+	if x != nil {
+		return x.FullUrl
+	}
+	return ""
+}
+
 var File_storage_proto protoreflect.FileDescriptor
 
 const file_storage_proto_rawDesc = "" +
 	"\n" +
-	"\rstorage.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto2I\n" +
-	"\x05empty\x12@\n" +
-	"\fblankRequest\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
+	"\rstorage.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"}\n" +
+	"\x0fshortURLRequest\x12!\n" +
+	"\foriginal_url\x18\x01 \x01(\tR\voriginalUrl\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12 \n" +
+	"\turl_alias\x18\x03 \x01(\tH\x00R\burlAlias\x88\x01\x01B\f\n" +
+	"\n" +
+	"_url_alias\"/\n" +
+	"\x10shortUrlResponse\x12\x1b\n" +
+	"\tshort_url\x18\x01 \x01(\tR\bshortUrl\"-\n" +
+	"\x0efullUrlRequest\x12\x1b\n" +
+	"\tshort_url\x18\x01 \x01(\tR\bshortUrl\",\n" +
+	"\x0ffullUrlResponse\x12\x19\n" +
+	"\bfull_url\x18\x01 \x01(\tR\afullUrl2p\n" +
+	"\n" +
+	"URLStorage\x12/\n" +
+	"\x06putURL\x12\x10.shortURLRequest\x1a\x11.shortUrlResponse\"\x00\x121\n" +
+	"\n" +
+	"getFullURL\x12\x0f.fullUrlRequest\x1a\x10.fullUrlResponse\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
 
+var (
+	file_storage_proto_rawDescOnce sync.Once
+	file_storage_proto_rawDescData []byte
+)
+
+func file_storage_proto_rawDescGZIP() []byte {
+	file_storage_proto_rawDescOnce.Do(func() {
+		file_storage_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_storage_proto_rawDesc), len(file_storage_proto_rawDesc)))
+	})
+	return file_storage_proto_rawDescData
+}
+
+var file_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_storage_proto_goTypes = []any{
-	(*emptypb.Empty)(nil), // 0: google.protobuf.Empty
+	(*ShortURLRequest)(nil),  // 0: shortURLRequest
+	(*ShortUrlResponse)(nil), // 1: shortUrlResponse
+	(*FullUrlRequest)(nil),   // 2: fullUrlRequest
+	(*FullUrlResponse)(nil),  // 3: fullUrlResponse
 }
 var file_storage_proto_depIdxs = []int32{
-	0, // 0: empty.blankRequest:input_type -> google.protobuf.Empty
-	0, // 1: empty.blankRequest:output_type -> google.protobuf.Empty
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	0, // 0: URLStorage.putURL:input_type -> shortURLRequest
+	2, // 1: URLStorage.getFullURL:input_type -> fullUrlRequest
+	1, // 2: URLStorage.putURL:output_type -> shortUrlResponse
+	3, // 3: URLStorage.getFullURL:output_type -> fullUrlResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -48,18 +274,20 @@ func file_storage_proto_init() {
 	if File_storage_proto != nil {
 		return
 	}
+	file_storage_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_storage_proto_rawDesc), len(file_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   0,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_storage_proto_goTypes,
 		DependencyIndexes: file_storage_proto_depIdxs,
+		MessageInfos:      file_storage_proto_msgTypes,
 	}.Build()
 	File_storage_proto = out.File
 	file_storage_proto_goTypes = nil
