@@ -6,6 +6,26 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "internal/proto;proto";
 
-service empty{
-  rpc blankRequest(google.protobuf.Empty) returns (google.protobuf.Empty) {};
+service URLStorage {
+  rpc putURL(shortURLRequest) returns (shortUrlResponse) {};
+  rpc getFullURL(fullUrlRequest) returns (fullUrlResponse) {};
+}
+
+
+message shortURLRequest{
+  string original_url = 1; // original url that is being compressed down
+  string user_id = 2; // user id that this url should be assigned to
+  optional string url_alias = 3; // pre-fab url user requested, if not present auto-generated
+}
+
+message shortUrlResponse{
+  string short_url = 1;
+}
+
+message fullUrlRequest {
+  string short_url = 1; // the short_url to reverse lookup
+}
+
+message fullUrlResponse{
+  string full_url = 1; // the full_url mapped to the short_url that was provided
 }
