@@ -9,3 +9,7 @@ import "google/protobuf/empty.proto";
 service emptyService {
   rpc emptyRPC(google.protobuf.Empty) returns (google.protobuf.Empty){};
 }
+
+service AdminControl {
+
+}
