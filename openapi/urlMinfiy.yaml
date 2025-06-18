@@ -1,4 +1,4 @@
-openapi: 3.0.4
+openapi: 3.0.0
 info:
   title: GoMinifyURL Shorter API
   version: 1.0.0
@@ -74,4 +74,4 @@ components:
             openid: Access your identity
 
 security:
-  - keycloakOAuth: [openid]  # Optional: Global security, or only per-route
+  - keycloakOAuth: [openid]
