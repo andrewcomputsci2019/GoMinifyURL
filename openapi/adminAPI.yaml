@@ -4,14 +4,15 @@ info:
   version: 1.0.0
   description: API for updating configuration and monitoring the health of services.
 servers:
-  - url: https://admin.yourdomain.com/api
+  - url: https://{hostname}/api/
+    variables:
+      hostname:
+        default: localhost
 paths:
   /getServices:
     get:
       summary: Get all registered services
       operationId: getServices
-      security:
-        - bearerAuth: []
       responses:
         '200':
           description: List of registered services
@@ -26,8 +27,6 @@ paths:
     post:
       summary: Register a new service
       operationId: addService
-      security:
-        - bearerAuth: []
       requestBody:
         description: New service to register
         required: true
@@ -43,8 +42,6 @@ paths:
     delete:
       summary: Remove an existing service
       operationId: removeService
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: query
@@ -62,8 +59,6 @@ paths:
     get:
       summary: Check service health
       operationId: checkHealth
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: query
@@ -93,6 +88,7 @@ components:
           tokenUrl: https://keycloak.example.com/realms/gominify/protocol/openid-connect/token
           scopes:
             openid: OpenID Connect basic authentication
+            admin: Admin scope for interacting with admin panel
 
   schemas:
     Service:
@@ -128,5 +124,4 @@ components:
           format: date-time
 
 security:
-  - keycloakOAuth:
-      - openid
+  - keycloakOAuth: [openid, admin]

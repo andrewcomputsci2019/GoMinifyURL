@@ -10,10 +10,12 @@ PROTO_OUT := internal/proto
 # OpenApi specs
 SHORTENER_SPEC := ../../openapi/urlMinfiy.yaml
 ANALYTICS_SPEC := ../../openapi/urlAnalytics.yaml
+ADMIN_SPEC	   := ../../openapi/adminAPI.yaml
 
 # OAPI-CodeGen config files
 SHORTENER_CONFIG := oapi-codegen.yaml
 ANALYTICS_CONFIG := oapi-codegen.yaml
+ADMIN_CONFIG	 := oapi-codegen.yaml
 
 # Targets
 .PHONY: all proto oapi tidy generate build clean
@@ -39,7 +41,7 @@ proto:
 		$(PROTO_SRC)
 
 # OpenApi code gen stubs targets
-oapi: oapi-shortener oapi-analytics
+oapi: oapi-shortener oapi-analytics oapi-admin
 
 oapi-shortener:
 	@echo "==== Generating Server Stubs from $(SHORTENER_SPEC) ===="
@@ -51,6 +53,11 @@ oapi-analytics:
 	@echo "==== Generating Server Stubs from $(ANALYTICS_SPEC) ===="
 	@cd api/analytics && \
 	$(OAPI) -config $(ANALYTICS_CONFIG) $(ANALYTICS_SPEC)
+	@echo "=== Code Gen complete ==="
+oapi-admin:
+	@echo "=== Generating Server Stubs from $() ==="
+	@cd api/admin && \
+	$(OAPI) -config $(ADMIN_CONFIG) $(ADMIN_SPEC)
 	@echo "=== Code Gen complete ==="
 
 tidy:
