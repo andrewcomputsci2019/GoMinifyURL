@@ -1,0 +1,132 @@
+openapi: 3.0.0
+info:
+  title: Admin Service API
+  version: 1.0.0
+  description: API for updating configuration and monitoring the health of services.
+servers:
+  - url: https://admin.yourdomain.com/api
+paths:
+  /getServices:
+    get:
+      summary: Get all registered services
+      operationId: getServices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of registered services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+
+  /addService:
+    post:
+      summary: Register a new service
+      operationId: addService
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: New service to register
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Service'
+      responses:
+        '201':
+          description: Service added successfully
+
+  /removeService:
+    delete:
+      summary: Remove an existing service
+      operationId: removeService
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          description: ID of the service to remove
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Service removed successfully
+        '404':
+          description: Service not found
+
+  /health:
+    get:
+      summary: Check service health
+      operationId: checkHealth
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          description: ID of service to get health for (optional)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Health information
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ServiceHealth'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceHealth'
+
+components:
+  securitySchemes:
+    keycloakOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://keycloak.example.com/realms/gominify/protocol/openid-connect/auth
+          tokenUrl: https://keycloak.example.com/realms/gominify/protocol/openid-connect/token
+          scopes:
+            openid: OpenID Connect basic authentication
+
+  schemas:
+    Service:
+      type: object
+      required:
+        - id
+        - name
+        - url
+      properties:
+        id:
+          type: string
+          example: service-123
+        name:
+          type: string
+          example: storage-service
+        url:
+          type: string
+          format: uri
+          example: http://storage.internal:8080
+
+    ServiceHealth:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, down]
+        lastChecked:
+          type: string
+          format: date-time
+
+security:
+  - keycloakOAuth:
+      - openid
