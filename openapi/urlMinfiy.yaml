@@ -48,6 +48,7 @@ paths:
   /:
     get:
       summary: Redirect to long URL
+      security: []
       description: Public endpoint that redirects users from a short slug.
       operationId: redirect
       parameters:
