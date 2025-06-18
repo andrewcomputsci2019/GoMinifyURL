@@ -1,6 +1,7 @@
 package storage
 
 import (
+	_ "GOMinifyURL/internal/storage/server"
 	"GOMinifyURL/internal/storage/utils"
 	"context"
 	"github.com/jackc/pgx/v5/pgxpool"
