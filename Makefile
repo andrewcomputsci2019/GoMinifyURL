@@ -8,9 +8,9 @@ PROTO_SRC := proto/storage.proto
 PROTO_OUT := internal/proto
 
 # OpenApi specs
-SHORTENER_SPEC := ../../openapi/urlMinfiy.yaml
-ANALYTICS_SPEC := ../../openapi/urlAnalytics.yaml
-ADMIN_SPEC	   := ../../openapi/adminAPI.yaml
+SHORTENER_SPEC := ../../../openapi/urlMinfiy.yaml
+ANALYTICS_SPEC := ../../../openapi/urlAnalytics.yaml
+ADMIN_SPEC	   := ../../../openapi/adminAPI.yaml
 
 # OAPI-CodeGen config files
 SHORTENER_CONFIG := oapi-codegen.yaml
@@ -45,18 +45,18 @@ oapi: oapi-shortener oapi-analytics oapi-admin
 
 oapi-shortener:
 	@echo "==== Generating Server Stubs from $(SHORTENER_SPEC) ===="
-	@cd api/shortener && \
+	@cd internal/api/shortener && \
 	$(OAPI) -config $(SHORTENER_CONFIG) $(SHORTENER_SPEC)
 	@echo "=== Code Gen complete ==="
 
 oapi-analytics:
 	@echo "==== Generating Server Stubs from $(ANALYTICS_SPEC) ===="
-	@cd api/analytics && \
+	@cd internal/api/analytics && \
 	$(OAPI) -config $(ANALYTICS_CONFIG) $(ANALYTICS_SPEC)
 	@echo "=== Code Gen complete ==="
 oapi-admin:
-	@echo "=== Generating Server Stubs from $() ==="
-	@cd api/admin && \
+	@echo "=== Generating Server Stubs from $(ADMIN_SPEC) ==="
+	@cd internal/api/admin && \
 	$(OAPI) -config $(ADMIN_CONFIG) $(ADMIN_SPEC)
 	@echo "=== Code Gen complete ==="
 
