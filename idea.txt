@@ -1,0 +1,9 @@
+have central database for holding keys to urls (postgres)
+have a service over grpc that checks for urls existing as well as fetching those urls, and caching (redis)
+have the database be replicated master-slave pattern
+have kafka setup for data streaming to click house
+have web server that handles redirects --> send data to kafka
+have another web server that handles dashboard for analytics
+have admin service that allows for spinning up new instances of stuff
+use grpc for internal communication to lean out the system
+solve initial problem of having one of each, then try to scale out
