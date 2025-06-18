@@ -1,13 +1,17 @@
 package storage
 
 import (
-	_ "GOMinifyURL/internal/storage/server"
+	"GOMinifyURL/internal/proto"
+	storageServer "GOMinifyURL/internal/storage/server"
 	"GOMinifyURL/internal/storage/utils"
 	"context"
+	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 	"path/filepath"
 )
 
@@ -51,4 +55,13 @@ func main() {
 	}
 	defer pool.Close()
 
+	server := grpc.NewServer()
+	proto.RegisterURLStorageServer(server, storageServer.NewStorageServer(pool))
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", viper.GetString("HOST"), viper.GetInt("PORT")))
+	if err != nil {
+		log.Panic(err.Error())
+		return
+	}
+	_ = server.Serve(listener)
+	return
 }
