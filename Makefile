@@ -4,7 +4,8 @@ PROTOC = protoc
 OAPI = go tool oapi-codegen
 
 # Proto paths
-PROTO_SRC := proto/storage.proto
+PROTO_STORAGE_SRC := proto/storage.proto
+PROTO_ADMIN_SRC := proto/admin.proto
 PROTO_OUT := internal/proto
 
 # OpenApi specs
@@ -30,15 +31,25 @@ all: clean tidy generate build
 generate: proto oapi
 
 # grpc gen
-proto:
-	@echo "==== Generating grpc stubs from $(PROTO_SRC) ======"
+proto: proto_storage proto_admin
+proto_storage:
+	@echo "==== Generating grpc stubs from $(PROTO_STORAGE_SRC) ======"
 	$(PROTOC) \
 		--proto_path=proto \
 		--go_out=$(PROTO_OUT) \
 		--go_opt=paths=source_relative \
 		--go-grpc_out=$(PROTO_OUT) \
 		--go-grpc_opt=paths=source_relative \
-		$(PROTO_SRC)
+		$(PROTO_STORAGE_SRC)
+proto_admin:
+	@echo "==== Generating grpc stubs from $(PROTO_ADMIN_SRC) ======"
+		$(PROTOC) \
+			--proto_path=proto \
+			--go_out=$(PROTO_OUT) \
+			--go_opt=paths=source_relative \
+			--go-grpc_out=$(PROTO_OUT) \
+			--go-grpc_opt=paths=source_relative \
+			$(PROTO_ADMIN_SRC)
 
 # OpenApi code gen stubs targets
 oapi: oapi-shortener oapi-analytics oapi-admin

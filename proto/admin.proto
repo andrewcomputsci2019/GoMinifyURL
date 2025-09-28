@@ -4,12 +4,53 @@ import "google/protobuf/timestamp.proto";
 
 import "google/protobuf/empty.proto";
 
+option go_package = "internal/proto;proto";
 
-
-service emptyService {
-  rpc emptyRPC(google.protobuf.Empty) returns (google.protobuf.Empty){};
+message nodeStatus{
+  enum status{HEALTHY = 0; SICK = 1; QUITING = 2;}
 }
 
-service AdminControl {
+message registrationMessage {
+  string serviceName  = 1;
+  // id of instance this needs to be unique
+  string instanceName = 2;
+  // dial addr is what is passed back to the client to connect to
+  string dialAddr     = 3;
+}
 
+message registrationResponse{
+  int32 request_ttl = 1;
+  int64 seqStart = 2;
+}
+
+message HeartBeat {
+  int64 seqNumber     = 1;
+  string instanceName = 2;
+  nodeStatus status   = 3;
+}
+
+message HeartBeatResponse {
+  //echo back seqNumber to client
+  int64 ack = 1;
+}
+
+message serviceListRequest {
+  string serviceName = 1;
+}
+
+message serviceInfo {
+  string serviceName  =  1;
+  string instanceName = 2;
+  string dialAddr     = 3;
+  nodeStatus latestStatus = 4;
+}
+
+message serviceListResponse{
+  repeated serviceInfo instances = 1;
+}
+
+service discovery {
+  rpc registerService(registrationMessage) returns (google.protobuf.Empty){};
+  rpc heartbeat (stream HeartBeat) returns (stream HeartBeatResponse){};
+  rpc requestServiceList(serviceListRequest) returns (serviceListResponse){};
 }
