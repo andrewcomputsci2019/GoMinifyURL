@@ -31,6 +31,7 @@ var (
 
 const (
 	ClaimsContextKey = "jwt_claims"
+	JwtTokenKey      = "jwt_token"
 )
 
 type KeycloakJWSValidator struct {
@@ -134,6 +135,7 @@ func Authenticate(validator KeycloakJWSValidator, cxt context.Context, input *op
 		return err
 	}
 	cxt = context.WithValue(cxt, ClaimsContextKey, claim)
+	cxt = context.WithValue(cxt, JwtTokenKey, jws)
 	input.RequestValidationInput.Request = input.RequestValidationInput.Request.WithContext(cxt)
 	return nil
 }
