@@ -2,12 +2,12 @@ syntax = 'proto3';
 
 import "google/protobuf/timestamp.proto";
 
-import "google/protobuf/empty.proto";
-
 option go_package = "internal/proto;proto";
 
-message nodeStatus{
-  enum status{HEALTHY = 0; SICK = 1; QUITING = 2;}
+enum NodeStatus {
+  HEALTHY = 0;
+  SICK    = 1;
+  QUITING = 2;
 }
 
 message registrationMessage {
@@ -19,19 +19,36 @@ message registrationMessage {
 }
 
 message registrationResponse{
+  // this time is the amount of time a service has to
   int32 request_ttl = 1;
   int64 seqStart = 2;
+  int64 nonce = 3;
+}
+
+message deRegistrationMessage {
+  string instanceName = 1;
+  int64 nonce = 2;
+}
+
+message deRegistrationResponse {
+  bool success = 1;
 }
 
 message HeartBeat {
   int64 seqNumber     = 1;
   string instanceName = 2;
-  nodeStatus status   = 3;
+  NodeStatus status   = 3;
 }
 
 message HeartBeatResponse {
   //echo back seqNumber to client
   int64 ack = 1;
+  oneof feedback{
+    string error = 2;   // downstream error with processing (like unknown connection etc)
+    string warning = 3; // ack lost etc
+    string info = 4; // lease info etc
+  }
+  optional google.protobuf.Timestamp leaseExpiryTime = 5;
 }
 
 message serviceListRequest {
@@ -42,7 +59,7 @@ message serviceInfo {
   string serviceName  =  1;
   string instanceName = 2;
   string dialAddr     = 3;
-  nodeStatus latestStatus = 4;
+  NodeStatus latestStatus = 4;
 }
 
 message serviceListResponse{
@@ -50,7 +67,8 @@ message serviceListResponse{
 }
 
 service discovery {
-  rpc registerService(registrationMessage) returns (google.protobuf.Empty){};
+  rpc registerService(registrationMessage) returns (registrationResponse){};
   rpc heartbeat (stream HeartBeat) returns (stream HeartBeatResponse){};
   rpc requestServiceList(serviceListRequest) returns (serviceListResponse){};
+  rpc deRegisterService(deRegistrationMessage) returns (deRegistrationResponse){};
 }

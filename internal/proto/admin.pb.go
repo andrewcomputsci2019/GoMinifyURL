@@ -9,8 +9,7 @@ package proto
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	_ "google.golang.org/protobuf/types/known/timestamppb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -23,88 +22,52 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type NodeStatusStatus int32
+type NodeStatus int32
 
 const (
-	NodeStatus_HEALTHY NodeStatusStatus = 0
-	NodeStatus_SICK    NodeStatusStatus = 1
-	NodeStatus_QUITING NodeStatusStatus = 2
+	NodeStatus_HEALTHY NodeStatus = 0
+	NodeStatus_SICK    NodeStatus = 1
+	NodeStatus_QUITING NodeStatus = 2
 )
 
-// Enum value maps for NodeStatusStatus.
+// Enum value maps for NodeStatus.
 var (
-	NodeStatusStatus_name = map[int32]string{
+	NodeStatus_name = map[int32]string{
 		0: "HEALTHY",
 		1: "SICK",
 		2: "QUITING",
 	}
-	NodeStatusStatus_value = map[string]int32{
+	NodeStatus_value = map[string]int32{
 		"HEALTHY": 0,
 		"SICK":    1,
 		"QUITING": 2,
 	}
 )
 
-func (x NodeStatusStatus) Enum() *NodeStatusStatus {
-	p := new(NodeStatusStatus)
+func (x NodeStatus) Enum() *NodeStatus {
+	p := new(NodeStatus)
 	*p = x
 	return p
 }
 
-func (x NodeStatusStatus) String() string {
+func (x NodeStatus) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (NodeStatusStatus) Descriptor() protoreflect.EnumDescriptor {
+func (NodeStatus) Descriptor() protoreflect.EnumDescriptor {
 	return file_admin_proto_enumTypes[0].Descriptor()
 }
 
-func (NodeStatusStatus) Type() protoreflect.EnumType {
+func (NodeStatus) Type() protoreflect.EnumType {
 	return &file_admin_proto_enumTypes[0]
 }
 
-func (x NodeStatusStatus) Number() protoreflect.EnumNumber {
+func (x NodeStatus) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use NodeStatusStatus.Descriptor instead.
-func (NodeStatusStatus) EnumDescriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{0, 0}
-}
-
-type NodeStatus struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NodeStatus) Reset() {
-	*x = NodeStatus{}
-	mi := &file_admin_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NodeStatus) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NodeStatus) ProtoMessage() {}
-
-func (x *NodeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NodeStatus.ProtoReflect.Descriptor instead.
-func (*NodeStatus) Descriptor() ([]byte, []int) {
+// Deprecated: Use NodeStatus.Descriptor instead.
+func (NodeStatus) EnumDescriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{0}
 }
 
@@ -121,7 +84,7 @@ type RegistrationMessage struct {
 
 func (x *RegistrationMessage) Reset() {
 	*x = RegistrationMessage{}
-	mi := &file_admin_proto_msgTypes[1]
+	mi := &file_admin_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -133,7 +96,7 @@ func (x *RegistrationMessage) String() string {
 func (*RegistrationMessage) ProtoMessage() {}
 
 func (x *RegistrationMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[1]
+	mi := &file_admin_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -146,7 +109,7 @@ func (x *RegistrationMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistrationMessage.ProtoReflect.Descriptor instead.
 func (*RegistrationMessage) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{1}
+	return file_admin_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegistrationMessage) GetServiceName() string {
@@ -171,16 +134,18 @@ func (x *RegistrationMessage) GetDialAddr() string {
 }
 
 type RegistrationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestTtl    int32                  `protobuf:"varint,1,opt,name=request_ttl,json=requestTtl,proto3" json:"request_ttl,omitempty"`
-	SeqStart      int64                  `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// this time is the amount of time a service has to
+	RequestTtl    int32 `protobuf:"varint,1,opt,name=request_ttl,json=requestTtl,proto3" json:"request_ttl,omitempty"`
+	SeqStart      int64 `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
+	Nonce         int64 `protobuf:"varint,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegistrationResponse) Reset() {
 	*x = RegistrationResponse{}
-	mi := &file_admin_proto_msgTypes[2]
+	mi := &file_admin_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -192,7 +157,7 @@ func (x *RegistrationResponse) String() string {
 func (*RegistrationResponse) ProtoMessage() {}
 
 func (x *RegistrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[2]
+	mi := &file_admin_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -205,7 +170,7 @@ func (x *RegistrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistrationResponse.ProtoReflect.Descriptor instead.
 func (*RegistrationResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{2}
+	return file_admin_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegistrationResponse) GetRequestTtl() int32 {
@@ -222,18 +187,121 @@ func (x *RegistrationResponse) GetSeqStart() int64 {
 	return 0
 }
 
+func (x *RegistrationResponse) GetNonce() int64 {
+	if x != nil {
+		return x.Nonce
+	}
+	return 0
+}
+
+type DeRegistrationMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceName  string                 `protobuf:"bytes,1,opt,name=instanceName,proto3" json:"instanceName,omitempty"`
+	Nonce         int64                  `protobuf:"varint,2,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeRegistrationMessage) Reset() {
+	*x = DeRegistrationMessage{}
+	mi := &file_admin_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeRegistrationMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeRegistrationMessage) ProtoMessage() {}
+
+func (x *DeRegistrationMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeRegistrationMessage.ProtoReflect.Descriptor instead.
+func (*DeRegistrationMessage) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DeRegistrationMessage) GetInstanceName() string {
+	if x != nil {
+		return x.InstanceName
+	}
+	return ""
+}
+
+func (x *DeRegistrationMessage) GetNonce() int64 {
+	if x != nil {
+		return x.Nonce
+	}
+	return 0
+}
+
+type DeRegistrationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeRegistrationResponse) Reset() {
+	*x = DeRegistrationResponse{}
+	mi := &file_admin_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeRegistrationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeRegistrationResponse) ProtoMessage() {}
+
+func (x *DeRegistrationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeRegistrationResponse.ProtoReflect.Descriptor instead.
+func (*DeRegistrationResponse) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DeRegistrationResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type HeartBeat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeqNumber     int64                  `protobuf:"varint,1,opt,name=seqNumber,proto3" json:"seqNumber,omitempty"`
 	InstanceName  string                 `protobuf:"bytes,2,opt,name=instanceName,proto3" json:"instanceName,omitempty"`
-	Status        *NodeStatus            `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Status        NodeStatus             `protobuf:"varint,3,opt,name=status,proto3,enum=NodeStatus" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HeartBeat) Reset() {
 	*x = HeartBeat{}
-	mi := &file_admin_proto_msgTypes[3]
+	mi := &file_admin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -245,7 +313,7 @@ func (x *HeartBeat) String() string {
 func (*HeartBeat) ProtoMessage() {}
 
 func (x *HeartBeat) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[3]
+	mi := &file_admin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -258,7 +326,7 @@ func (x *HeartBeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartBeat.ProtoReflect.Descriptor instead.
 func (*HeartBeat) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{3}
+	return file_admin_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *HeartBeat) GetSeqNumber() int64 {
@@ -275,24 +343,31 @@ func (x *HeartBeat) GetInstanceName() string {
 	return ""
 }
 
-func (x *HeartBeat) GetStatus() *NodeStatus {
+func (x *HeartBeat) GetStatus() NodeStatus {
 	if x != nil {
 		return x.Status
 	}
-	return nil
+	return NodeStatus_HEALTHY
 }
 
 type HeartBeatResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// echo back seqNumber to client
-	Ack           int64 `protobuf:"varint,1,opt,name=ack,proto3" json:"ack,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Ack int64 `protobuf:"varint,1,opt,name=ack,proto3" json:"ack,omitempty"`
+	// Types that are valid to be assigned to Feedback:
+	//
+	//	*HeartBeatResponse_Error
+	//	*HeartBeatResponse_Warning
+	//	*HeartBeatResponse_Info
+	Feedback        isHeartBeatResponse_Feedback `protobuf_oneof:"feedback"`
+	LeaseExpiryTime *timestamppb.Timestamp       `protobuf:"bytes,5,opt,name=leaseExpiryTime,proto3,oneof" json:"leaseExpiryTime,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *HeartBeatResponse) Reset() {
 	*x = HeartBeatResponse{}
-	mi := &file_admin_proto_msgTypes[4]
+	mi := &file_admin_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -304,7 +379,7 @@ func (x *HeartBeatResponse) String() string {
 func (*HeartBeatResponse) ProtoMessage() {}
 
 func (x *HeartBeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[4]
+	mi := &file_admin_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -317,7 +392,7 @@ func (x *HeartBeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartBeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartBeatResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{4}
+	return file_admin_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *HeartBeatResponse) GetAck() int64 {
@@ -326,6 +401,69 @@ func (x *HeartBeatResponse) GetAck() int64 {
 	}
 	return 0
 }
+
+func (x *HeartBeatResponse) GetFeedback() isHeartBeatResponse_Feedback {
+	if x != nil {
+		return x.Feedback
+	}
+	return nil
+}
+
+func (x *HeartBeatResponse) GetError() string {
+	if x != nil {
+		if x, ok := x.Feedback.(*HeartBeatResponse_Error); ok {
+			return x.Error
+		}
+	}
+	return ""
+}
+
+func (x *HeartBeatResponse) GetWarning() string {
+	if x != nil {
+		if x, ok := x.Feedback.(*HeartBeatResponse_Warning); ok {
+			return x.Warning
+		}
+	}
+	return ""
+}
+
+func (x *HeartBeatResponse) GetInfo() string {
+	if x != nil {
+		if x, ok := x.Feedback.(*HeartBeatResponse_Info); ok {
+			return x.Info
+		}
+	}
+	return ""
+}
+
+func (x *HeartBeatResponse) GetLeaseExpiryTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LeaseExpiryTime
+	}
+	return nil
+}
+
+type isHeartBeatResponse_Feedback interface {
+	isHeartBeatResponse_Feedback()
+}
+
+type HeartBeatResponse_Error struct {
+	Error string `protobuf:"bytes,2,opt,name=error,proto3,oneof"` // downstream error with processing (like unknown connection etc)
+}
+
+type HeartBeatResponse_Warning struct {
+	Warning string `protobuf:"bytes,3,opt,name=warning,proto3,oneof"` // ack lost etc
+}
+
+type HeartBeatResponse_Info struct {
+	Info string `protobuf:"bytes,4,opt,name=info,proto3,oneof"` // lease info etc
+}
+
+func (*HeartBeatResponse_Error) isHeartBeatResponse_Feedback() {}
+
+func (*HeartBeatResponse_Warning) isHeartBeatResponse_Feedback() {}
+
+func (*HeartBeatResponse_Info) isHeartBeatResponse_Feedback() {}
 
 type ServiceListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -336,7 +474,7 @@ type ServiceListRequest struct {
 
 func (x *ServiceListRequest) Reset() {
 	*x = ServiceListRequest{}
-	mi := &file_admin_proto_msgTypes[5]
+	mi := &file_admin_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +486,7 @@ func (x *ServiceListRequest) String() string {
 func (*ServiceListRequest) ProtoMessage() {}
 
 func (x *ServiceListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[5]
+	mi := &file_admin_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +499,7 @@ func (x *ServiceListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceListRequest.ProtoReflect.Descriptor instead.
 func (*ServiceListRequest) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{5}
+	return file_admin_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ServiceListRequest) GetServiceName() string {
@@ -376,14 +514,14 @@ type ServiceInfo struct {
 	ServiceName   string                 `protobuf:"bytes,1,opt,name=serviceName,proto3" json:"serviceName,omitempty"`
 	InstanceName  string                 `protobuf:"bytes,2,opt,name=instanceName,proto3" json:"instanceName,omitempty"`
 	DialAddr      string                 `protobuf:"bytes,3,opt,name=dialAddr,proto3" json:"dialAddr,omitempty"`
-	LatestStatus  *NodeStatus            `protobuf:"bytes,4,opt,name=latestStatus,proto3" json:"latestStatus,omitempty"`
+	LatestStatus  NodeStatus             `protobuf:"varint,4,opt,name=latestStatus,proto3,enum=NodeStatus" json:"latestStatus,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ServiceInfo) Reset() {
 	*x = ServiceInfo{}
-	mi := &file_admin_proto_msgTypes[6]
+	mi := &file_admin_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -395,7 +533,7 @@ func (x *ServiceInfo) String() string {
 func (*ServiceInfo) ProtoMessage() {}
 
 func (x *ServiceInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[6]
+	mi := &file_admin_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +546,7 @@ func (x *ServiceInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceInfo.ProtoReflect.Descriptor instead.
 func (*ServiceInfo) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{6}
+	return file_admin_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ServiceInfo) GetServiceName() string {
@@ -432,11 +570,11 @@ func (x *ServiceInfo) GetDialAddr() string {
 	return ""
 }
 
-func (x *ServiceInfo) GetLatestStatus() *NodeStatus {
+func (x *ServiceInfo) GetLatestStatus() NodeStatus {
 	if x != nil {
 		return x.LatestStatus
 	}
-	return nil
+	return NodeStatus_HEALTHY
 }
 
 type ServiceListResponse struct {
@@ -448,7 +586,7 @@ type ServiceListResponse struct {
 
 func (x *ServiceListResponse) Reset() {
 	*x = ServiceListResponse{}
-	mi := &file_admin_proto_msgTypes[7]
+	mi := &file_admin_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +598,7 @@ func (x *ServiceListResponse) String() string {
 func (*ServiceListResponse) ProtoMessage() {}
 
 func (x *ServiceListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_proto_msgTypes[7]
+	mi := &file_admin_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +611,7 @@ func (x *ServiceListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceListResponse.ProtoReflect.Descriptor instead.
 func (*ServiceListResponse) Descriptor() ([]byte, []int) {
-	return file_admin_proto_rawDescGZIP(), []int{7}
+	return file_admin_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ServiceListResponse) GetInstances() []*ServiceInfo {
@@ -487,41 +625,54 @@ var File_admin_proto protoreflect.FileDescriptor
 
 const file_admin_proto_rawDesc = "" +
 	"\n" +
-	"\vadmin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bgoogle/protobuf/empty.proto\":\n" +
-	"\n" +
-	"nodeStatus\",\n" +
-	"\x06status\x12\v\n" +
-	"\aHEALTHY\x10\x00\x12\b\n" +
-	"\x04SICK\x10\x01\x12\v\n" +
-	"\aQUITING\x10\x02\"w\n" +
+	"\vadmin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"w\n" +
 	"\x13registrationMessage\x12 \n" +
 	"\vserviceName\x18\x01 \x01(\tR\vserviceName\x12\"\n" +
 	"\finstanceName\x18\x02 \x01(\tR\finstanceName\x12\x1a\n" +
-	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\"S\n" +
+	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\"i\n" +
 	"\x14registrationResponse\x12\x1f\n" +
 	"\vrequest_ttl\x18\x01 \x01(\x05R\n" +
 	"requestTtl\x12\x1a\n" +
-	"\bseqStart\x18\x02 \x01(\x03R\bseqStart\"r\n" +
+	"\bseqStart\x18\x02 \x01(\x03R\bseqStart\x12\x14\n" +
+	"\x05nonce\x18\x03 \x01(\x03R\x05nonce\"Q\n" +
+	"\x15deRegistrationMessage\x12\"\n" +
+	"\finstanceName\x18\x01 \x01(\tR\finstanceName\x12\x14\n" +
+	"\x05nonce\x18\x02 \x01(\x03R\x05nonce\"2\n" +
+	"\x16deRegistrationResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"r\n" +
 	"\tHeartBeat\x12\x1c\n" +
 	"\tseqNumber\x18\x01 \x01(\x03R\tseqNumber\x12\"\n" +
 	"\finstanceName\x18\x02 \x01(\tR\finstanceName\x12#\n" +
-	"\x06status\x18\x03 \x01(\v2\v.nodeStatusR\x06status\"%\n" +
+	"\x06status\x18\x03 \x01(\x0e2\v.NodeStatusR\x06status\"\xda\x01\n" +
 	"\x11HeartBeatResponse\x12\x10\n" +
-	"\x03ack\x18\x01 \x01(\x03R\x03ack\"6\n" +
+	"\x03ack\x18\x01 \x01(\x03R\x03ack\x12\x16\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x12\x1a\n" +
+	"\awarning\x18\x03 \x01(\tH\x00R\awarning\x12\x14\n" +
+	"\x04info\x18\x04 \x01(\tH\x00R\x04info\x12I\n" +
+	"\x0fleaseExpiryTime\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampH\x01R\x0fleaseExpiryTime\x88\x01\x01B\n" +
+	"\n" +
+	"\bfeedbackB\x12\n" +
+	"\x10_leaseExpiryTime\"6\n" +
 	"\x12serviceListRequest\x12 \n" +
 	"\vserviceName\x18\x01 \x01(\tR\vserviceName\"\xa0\x01\n" +
 	"\vserviceInfo\x12 \n" +
 	"\vserviceName\x18\x01 \x01(\tR\vserviceName\x12\"\n" +
 	"\finstanceName\x18\x02 \x01(\tR\finstanceName\x12\x1a\n" +
 	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\x12/\n" +
-	"\flatestStatus\x18\x04 \x01(\v2\v.nodeStatusR\flatestStatus\"A\n" +
+	"\flatestStatus\x18\x04 \x01(\x0e2\v.NodeStatusR\flatestStatus\"A\n" +
 	"\x13serviceListResponse\x12*\n" +
-	"\tinstances\x18\x01 \x03(\v2\f.serviceInfoR\tinstances2\xc4\x01\n" +
-	"\tdiscovery\x12A\n" +
-	"\x0fregisterService\x12\x14.registrationMessage\x1a\x16.google.protobuf.Empty\"\x00\x121\n" +
+	"\tinstances\x18\x01 \x03(\v2\f.serviceInfoR\tinstances*0\n" +
+	"\n" +
+	"NodeStatus\x12\v\n" +
+	"\aHEALTHY\x10\x00\x12\b\n" +
+	"\x04SICK\x10\x01\x12\v\n" +
+	"\aQUITING\x10\x022\x8b\x02\n" +
+	"\tdiscovery\x12@\n" +
+	"\x0fregisterService\x12\x14.registrationMessage\x1a\x15.registrationResponse\"\x00\x121\n" +
 	"\theartbeat\x12\n" +
 	".HeartBeat\x1a\x12.HeartBeatResponse\"\x00(\x010\x01\x12A\n" +
-	"\x12requestServiceList\x12\x13.serviceListRequest\x1a\x14.serviceListResponse\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
+	"\x12requestServiceList\x12\x13.serviceListRequest\x1a\x14.serviceListResponse\"\x00\x12F\n" +
+	"\x11deRegisterService\x12\x16.deRegistrationMessage\x1a\x17.deRegistrationResponse\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
 
 var (
 	file_admin_proto_rawDescOnce sync.Once
@@ -536,34 +687,38 @@ func file_admin_proto_rawDescGZIP() []byte {
 }
 
 var file_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_admin_proto_goTypes = []any{
-	(NodeStatusStatus)(0),        // 0: nodeStatus.status
-	(*NodeStatus)(nil),           // 1: nodeStatus
-	(*RegistrationMessage)(nil),  // 2: registrationMessage
-	(*RegistrationResponse)(nil), // 3: registrationResponse
-	(*HeartBeat)(nil),            // 4: HeartBeat
-	(*HeartBeatResponse)(nil),    // 5: HeartBeatResponse
-	(*ServiceListRequest)(nil),   // 6: serviceListRequest
-	(*ServiceInfo)(nil),          // 7: serviceInfo
-	(*ServiceListResponse)(nil),  // 8: serviceListResponse
-	(*emptypb.Empty)(nil),        // 9: google.protobuf.Empty
+	(NodeStatus)(0),                // 0: NodeStatus
+	(*RegistrationMessage)(nil),    // 1: registrationMessage
+	(*RegistrationResponse)(nil),   // 2: registrationResponse
+	(*DeRegistrationMessage)(nil),  // 3: deRegistrationMessage
+	(*DeRegistrationResponse)(nil), // 4: deRegistrationResponse
+	(*HeartBeat)(nil),              // 5: HeartBeat
+	(*HeartBeatResponse)(nil),      // 6: HeartBeatResponse
+	(*ServiceListRequest)(nil),     // 7: serviceListRequest
+	(*ServiceInfo)(nil),            // 8: serviceInfo
+	(*ServiceListResponse)(nil),    // 9: serviceListResponse
+	(*timestamppb.Timestamp)(nil),  // 10: google.protobuf.Timestamp
 }
 var file_admin_proto_depIdxs = []int32{
-	1, // 0: HeartBeat.status:type_name -> nodeStatus
-	1, // 1: serviceInfo.latestStatus:type_name -> nodeStatus
-	7, // 2: serviceListResponse.instances:type_name -> serviceInfo
-	2, // 3: discovery.registerService:input_type -> registrationMessage
-	4, // 4: discovery.heartbeat:input_type -> HeartBeat
-	6, // 5: discovery.requestServiceList:input_type -> serviceListRequest
-	9, // 6: discovery.registerService:output_type -> google.protobuf.Empty
-	5, // 7: discovery.heartbeat:output_type -> HeartBeatResponse
-	8, // 8: discovery.requestServiceList:output_type -> serviceListResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0,  // 0: HeartBeat.status:type_name -> NodeStatus
+	10, // 1: HeartBeatResponse.leaseExpiryTime:type_name -> google.protobuf.Timestamp
+	0,  // 2: serviceInfo.latestStatus:type_name -> NodeStatus
+	8,  // 3: serviceListResponse.instances:type_name -> serviceInfo
+	1,  // 4: discovery.registerService:input_type -> registrationMessage
+	5,  // 5: discovery.heartbeat:input_type -> HeartBeat
+	7,  // 6: discovery.requestServiceList:input_type -> serviceListRequest
+	3,  // 7: discovery.deRegisterService:input_type -> deRegistrationMessage
+	2,  // 8: discovery.registerService:output_type -> registrationResponse
+	6,  // 9: discovery.heartbeat:output_type -> HeartBeatResponse
+	9,  // 10: discovery.requestServiceList:output_type -> serviceListResponse
+	4,  // 11: discovery.deRegisterService:output_type -> deRegistrationResponse
+	8,  // [8:12] is the sub-list for method output_type
+	4,  // [4:8] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_admin_proto_init() }
@@ -571,13 +726,18 @@ func file_admin_proto_init() {
 	if File_admin_proto != nil {
 		return
 	}
+	file_admin_proto_msgTypes[5].OneofWrappers = []any{
+		(*HeartBeatResponse_Error)(nil),
+		(*HeartBeatResponse_Warning)(nil),
+		(*HeartBeatResponse_Info)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_admin_proto_rawDesc), len(file_admin_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,15 +22,17 @@ const (
 	Discovery_RegisterService_FullMethodName    = "/discovery/registerService"
 	Discovery_Heartbeat_FullMethodName          = "/discovery/heartbeat"
 	Discovery_RequestServiceList_FullMethodName = "/discovery/requestServiceList"
+	Discovery_DeRegisterService_FullMethodName  = "/discovery/deRegisterService"
 )
 
 // DiscoveryClient is the client API for Discovery service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DiscoveryClient interface {
-	RegisterService(ctx context.Context, in *RegistrationMessage, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	RegisterService(ctx context.Context, in *RegistrationMessage, opts ...grpc.CallOption) (*RegistrationResponse, error)
 	Heartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[HeartBeat, HeartBeatResponse], error)
 	RequestServiceList(ctx context.Context, in *ServiceListRequest, opts ...grpc.CallOption) (*ServiceListResponse, error)
+	DeRegisterService(ctx context.Context, in *DeRegistrationMessage, opts ...grpc.CallOption) (*DeRegistrationResponse, error)
 }
 
 type discoveryClient struct {
@@ -42,9 +43,9 @@ func NewDiscoveryClient(cc grpc.ClientConnInterface) DiscoveryClient {
 	return &discoveryClient{cc}
 }
 
-func (c *discoveryClient) RegisterService(ctx context.Context, in *RegistrationMessage, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *discoveryClient) RegisterService(ctx context.Context, in *RegistrationMessage, opts ...grpc.CallOption) (*RegistrationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
+	out := new(RegistrationResponse)
 	err := c.cc.Invoke(ctx, Discovery_RegisterService_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -75,13 +76,24 @@ func (c *discoveryClient) RequestServiceList(ctx context.Context, in *ServiceLis
 	return out, nil
 }
 
+func (c *discoveryClient) DeRegisterService(ctx context.Context, in *DeRegistrationMessage, opts ...grpc.CallOption) (*DeRegistrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeRegistrationResponse)
+	err := c.cc.Invoke(ctx, Discovery_DeRegisterService_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DiscoveryServer is the server API for Discovery service.
 // All implementations must embed UnimplementedDiscoveryServer
 // for forward compatibility.
 type DiscoveryServer interface {
-	RegisterService(context.Context, *RegistrationMessage) (*emptypb.Empty, error)
+	RegisterService(context.Context, *RegistrationMessage) (*RegistrationResponse, error)
 	Heartbeat(grpc.BidiStreamingServer[HeartBeat, HeartBeatResponse]) error
 	RequestServiceList(context.Context, *ServiceListRequest) (*ServiceListResponse, error)
+	DeRegisterService(context.Context, *DeRegistrationMessage) (*DeRegistrationResponse, error)
 	mustEmbedUnimplementedDiscoveryServer()
 }
 
@@ -92,7 +104,7 @@ type DiscoveryServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDiscoveryServer struct{}
 
-func (UnimplementedDiscoveryServer) RegisterService(context.Context, *RegistrationMessage) (*emptypb.Empty, error) {
+func (UnimplementedDiscoveryServer) RegisterService(context.Context, *RegistrationMessage) (*RegistrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
 }
 func (UnimplementedDiscoveryServer) Heartbeat(grpc.BidiStreamingServer[HeartBeat, HeartBeatResponse]) error {
@@ -100,6 +112,9 @@ func (UnimplementedDiscoveryServer) Heartbeat(grpc.BidiStreamingServer[HeartBeat
 }
 func (UnimplementedDiscoveryServer) RequestServiceList(context.Context, *ServiceListRequest) (*ServiceListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestServiceList not implemented")
+}
+func (UnimplementedDiscoveryServer) DeRegisterService(context.Context, *DeRegistrationMessage) (*DeRegistrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeRegisterService not implemented")
 }
 func (UnimplementedDiscoveryServer) mustEmbedUnimplementedDiscoveryServer() {}
 func (UnimplementedDiscoveryServer) testEmbeddedByValue()                   {}
@@ -165,6 +180,24 @@ func _Discovery_RequestServiceList_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Discovery_DeRegisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeRegistrationMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DiscoveryServer).DeRegisterService(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Discovery_DeRegisterService_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DiscoveryServer).DeRegisterService(ctx, req.(*DeRegistrationMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Discovery_ServiceDesc is the grpc.ServiceDesc for Discovery service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -179,6 +212,10 @@ var Discovery_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "requestServiceList",
 			Handler:    _Discovery_RequestServiceList_Handler,
+		},
+		{
+			MethodName: "deRegisterService",
+			Handler:    _Discovery_DeRegisterService_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
