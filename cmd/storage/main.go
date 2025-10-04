@@ -6,13 +6,14 @@ import (
 	"GOMinifyURL/internal/storage/utils"
 	"context"
 	"fmt"
+	"log"
+	"net"
+	"path/filepath"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
-	"log"
-	"net"
-	"path/filepath"
 )
 
 func main() {
