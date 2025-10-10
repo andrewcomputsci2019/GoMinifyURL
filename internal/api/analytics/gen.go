@@ -32,6 +32,9 @@ type GetUserTopUrlsParams struct {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get information about entire system this path does not require oauth
+	// (GET /general)
+	GetGeneral(w http.ResponseWriter, r *http.Request)
 	// Get detailed analytics for a shortened URL
 	// (GET /url/{shortId}/stats)
 	GetDetailedUrlStats(w http.ResponseWriter, r *http.Request, shortId string)
@@ -55,6 +58,20 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// GetGeneral operation middleware
+func (siw *ServerInterfaceWrapper) GetGeneral(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGeneral(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetDetailedUrlStats operation middleware
 func (siw *ServerInterfaceWrapper) GetDetailedUrlStats(w http.ResponseWriter, r *http.Request) {
 
@@ -71,7 +88,7 @@ func (siw *ServerInterfaceWrapper) GetDetailedUrlStats(w http.ResponseWriter, r 
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid"})
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "analytics:read"})
 
 	r = r.WithContext(ctx)
 
@@ -91,7 +108,7 @@ func (siw *ServerInterfaceWrapper) GetUserGeoSummary(w http.ResponseWriter, r *h
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid"})
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "analytics:read"})
 
 	r = r.WithContext(ctx)
 
@@ -111,7 +128,7 @@ func (siw *ServerInterfaceWrapper) GetUserReferralGraph(w http.ResponseWriter, r
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid"})
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "analytics:read"})
 
 	r = r.WithContext(ctx)
 
@@ -133,7 +150,7 @@ func (siw *ServerInterfaceWrapper) GetUserTopUrls(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid"})
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "analytics:read"})
 
 	r = r.WithContext(ctx)
 
@@ -279,6 +296,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/general", wrapper.GetGeneral)
 	m.HandleFunc("GET "+options.BaseURL+"/url/{shortId}/stats", wrapper.GetDetailedUrlStats)
 	m.HandleFunc("GET "+options.BaseURL+"/user/geo", wrapper.GetUserGeoSummary)
 	m.HandleFunc("GET "+options.BaseURL+"/user/referrals", wrapper.GetUserReferralGraph)
@@ -290,27 +308,30 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/7RX3W7bOBN9lQFvvhRwLDsteqG7fuluELS7WST1xaIpUJoaW6wpkiVHSVXDwF7tA+y+",
-	"YZ9kMZTknzpOf3NliBrOnJk5ZzReCuUq7yxaiiJfioiqDpqaK1VihelogY0yTi4untVU8sHMuNv0RtZU",
-	"uqA/StLOnroC9w4nwYhclEQ+5lnWexriB1l5g0PlqiygNFXM5q7SVs+azAdHTjmTOY9WF8fKWYuKMvYr",
-	"BiIq51tc7XuRiwuP9vw5nLaGMJVRK2BztKRVwiFWA0FugT8TUPInVuy58Shy4TjmiVjxkbYzxyALjCpo",
-	"nzDk4pmVpiGtIkivYeYCnLnfUpTJ5cshTCJGeIHNKWNKr7ukSZPhCFvWINe+nv1xLgbiBkNso4yHo+GI",
-	"M2bA0muRi8fpaCC8pDIVL6uDyZaxdIHOi1UWSbb9nyPtw75EqoONMEcH0hYQcIYhSAPTgHJRuFsbW7QQ",
-	"tZ0bhOQXOKdre2FNA1IpjFFPDcK0ASoR3K3FAG6WHlpLkRCH1LBzbuwZ0nMkqQ0Wk2CuEkbOIcgKCUMU",
-	"+eul0IyQ8xIDYWXFZerSEgMR8H2tAxYip1Ajs6fESnKGXc8iBW3nYrV6w8bROxtbdp2MRvyjnCW0qSbS",
-	"e9PRKXsXuTDLLX8+MHbS7W1ltFrE/zenrrYUGj7ShFW8w5IttgBpSzjHwO1Tm8ufo91wbvoOFYnNgQxB",
-	"NvzcNyl+X/D2OobvjN63YP82C5GkOU0Vuiv2vns+2mVkT4uNCtjxk9F4n7wT208kLFqjx/tGv7ow1UWB",
-	"Fj799S/UEQMUDiNYR8zUnqTt/Sd3BLl8mWxnrrZFSqEfpImjn43Q1/3sesO0i3VVSW4z8x2Kvcx6aXFF",
-	"0WLRAlkNRMY4szm6LwpXbpTKkkvshNT8yHrsiAZSBRcjSGN6YXKE/8Xd2HF4bScRZ7VJyG50rKXRH7Wd",
-	"g6wLjVYhGNcKBY5wOB8OoERJlfTgAniNoEoZ6NEByU8ihjN0V11ZflCXX2L+bsF+r6tpO5ZaBcMsuAqo",
-	"1LEvkhjcr9Rdf69u3bFBIgzrIitXIBydX13A4/HTp8djkMaX8vjk0cbz1wttXxndxDk2eIOm63TPsK+T",
-	"yA+QVx0Ovv6cdR9lLHpyGW0XcYvQO4PrC7SeB+lLblc/ruDT3/9sPj8Q0CRixFL7VkjMalWHgJZ2AAyv",
-	"7S9SlcB8AW2LhDFC6W6hkrZJtpHJrhm6hLm+QdtFYgctUyREj0rPtFojuofll12mZ5zFQxP9m0b8fQP8",
-	"e1jZZ9o1rJAkH56NYTfoQQKu6bLNQnL+K/gXpF1gAUZH6kfmnSEqF+k46QGLrXjDa/unq0FJ2/Gm2RCO",
-	"HIQUB2reqpLvt0ZXmt7CegWCo0p+0FVd5XAyum+gvnJ+Eswd69Oh+UfOJ4hbOI4KnMnaUA7j0QAq+SEF",
-	"TTHTEva+xjQfuy0sYRXbO1d3X+Tj0UB0wEV+wg/atg/j/fH6w6vZIWVwO04Py+PnKuCV8/Ci3SxSWfmz",
-	"u/kMP7wYKMU/wMP1ZNwnb5vLN0TFcNNzq975s7UsXSTmxipb7zYZ/3GRQcupaZvS2+zQRfA6YfgVo3mz",
-	"+i8AAP//cRGVhbUOAAA=",
+	"H4sIAAAAAAAC/8RY3W4buxF+lQFv6gBrreQEudBd6rSGkbQu7PiiiIOG4o60jLkkQ87aUQwBveoD9Lxh",
+	"nuRgyF39WJLjk/ggV5Z2yZlvZr5vZuQ7oVzjnUVLUYzvRETVBk3zC1Vjg+nRNc6VcfL67FVLNT+YGneb",
+	"3siWahf0V0na2WNX4dbDy2DEWNREPo7Lsrc0wC+y8QYHyjVlQGmaWM5co62ezksfHDnlTOk8Wl0dKmct",
+	"KirZrihEVM5nXNJKMyet4jigrMRYnKOswGNoIrgpUI2wPAIRww0GUYhsVYzFmUd7+hqOs3mYyKgVsBO0",
+	"pFVCLxaFIHeNTxlGsicWbHnuUYyFY59HYsGPtJ06Dq3CqIL2CcNYvFpGIb2GqQtw4v6RvFyevx3AZcQI",
+	"b3B+zJjS6y5VpMmwh7XTaxl59a9TUYgbDDF7GQ2GgxFHzICl12Isng+Gg6EohJdUp5SXM7QYpOHPMyT+",
+	"4zyGlKxTTuoJ0kl3pBABo3c25modDYf8RzlLaNNN6b3pEl1+iozhTkSmneRPPrBl0vk2OZLmrbbXcTs9",
+	"tm0mGLjk6QBQLQlqeYMwQbQQaxcILVZimfJ8I1eXpDnHSgdUtMP2P5e2Q38oE8t7qGUEH5zCGLECd4MB",
+	"NEUweoqkG9zlro0YHowgHYCAMx0Jwy7Ma8SZfEJFmTib9roqAdMpNCnDICeuJajdLTTSzrOjAgxnrABp",
+	"q1WAyUdsm0aGeS7pDkMskoAQ55GwAap1BGYJVA4jWEcQ8HPLJxK9k8myDaa8S+U4rRZlJJkz3hFpM4Rz",
+	"pDbYCDN0HbopBo5pElBeV+7Wxkx1iNrODOYyAwviyp5ZMwepuDJ6YhAm81Q0d2tzlvlLPpkbwiaBXyNJ",
+	"bbC6DOYiYWQBBNkgpeK9vxOaEXK4ohBWNlyMLqzE+hR4JcYUWizWKN3VLVLQdiYWiw9PKhFltLqOf50f",
+	"u9YSV+5OaMIm7jjJJ9YAaUs4ywRVq8v30W7xbvlAhiDn/L0vUvwx5/k6hh/03pdg+3an8+OUoV2+HyOq",
+	"nharFsqGXwxH2+S9tP0QxCofer596O8uTHRVoYVv//0t6XElHndre5KCC9zh80tL6XWeceT41n04L3bA",
+	"OX+brk1da6us7m7KJzbfm+/v+xFZ3J+wH5ixm42h2kpKr8q+63IMnfwjhnKG7rualyuRs1oTsSHxJrKU",
+	"O46CVMHFCNKYXtPs4S9x03ccXNnLiNPWJGQ3OrbS6K/azkC2lUarEIzLGoMDHMwGBdQoqZGeU+81gqpl",
+	"oGd7ugXX5gTdRZeWn5T090Szbzpl8cM0uK4Z90IuHhb5pr13t+7QIBGGZZKVqxAOTi/O4Pno5cvDEUjj",
+	"a3l49Gxl+fEa3RZV16wODd6g6SrdM+xx6npKNqv9aJZ7VbcdYtWzLY3QNYZvNMHv8HwWpK/zdpFbH3z7",
+	"3/9XowwCmsSUWGuflcU0V20IaGkDwODK/k2qGphAoG2VMMZ7857Zrxm6hJm+6XejZCBTR0L0qPRUqyWi",
+	"B2h/3kV6wlH82cz/Q+PioWHwIzTtI+0KVkmSv4CeYRPFXkYu+bNOS3L+EYQM0l5jBUZHWv6G2uWicZEO",
+	"k0CwWvM3uLL/di0oaTsizVcMJAch+YGWV7Zk+6PRjaaPsNyv4KCRX3TTNmM4Gj7Uct85fxnMjt1sX4ck",
+	"5xPENRwHFU5la2gMo2EBjfySnCafacP73GLqoN2Kl7CK9YWuuy/Go2EhOuBifMRftM1fRtsN+Kf3vn1S",
+	"4XIc79fL00rinfPwJq8tKa08mFeD+heogxKgPcRc9s5tNufg8v8HMoXajV/7d7WLxBRYlNLr/yyBlPzr",
+	"WQYtJybnvz+3wQzBu4XhV+znw+L3AAAA//+UDUFUcBEAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

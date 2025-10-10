@@ -1,10 +1,10 @@
 openapi: 3.0.0
 info:
   title: Admin Service API
-  version: 1.0.0
+  version: 1.0.1
   description: API for updating configuration and monitoring the health of services.
 servers:
-  - url: https://{hostname}/api/
+  - url: https://{hostname}/api_admin/
     variables:
       hostname:
         default: localhost

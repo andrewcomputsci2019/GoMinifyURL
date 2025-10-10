@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: GoMinifyURL Shorter API
-  version: 1.0.0
+  version: 1.0.1
   description: |
     A minimal URL shortening service. Uses Keycloak for authentication.
 
@@ -18,7 +18,7 @@ paths:
       description: Authenticated users can shorten a long URL.
       operationId: shrinkUrl
       security:
-        - keycloakOAuth: [openid]
+        - keycloakOAuth: [openid,url:write]
       requestBody:
         required: true
         content:
@@ -73,6 +73,7 @@ components:
           tokenUrl: https://keycloak.example.com/realms/gominifyurl/protocol/openid-connect/token
           scopes:
             openid: Access your identity
+            url:write: Ability to put urls into system
 
 security:
   - keycloakOAuth: [openid]
