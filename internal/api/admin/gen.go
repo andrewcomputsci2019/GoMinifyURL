@@ -27,9 +27,9 @@ const (
 
 // Defines values for ServiceHealthStatus.
 const (
-	Degraded ServiceHealthStatus = "degraded"
-	Down     ServiceHealthStatus = "down"
-	Healthy  ServiceHealthStatus = "healthy"
+	Healthy ServiceHealthStatus = "healthy"
+	Quiting ServiceHealthStatus = "quiting"
+	Sick    ServiceHealthStatus = "sick"
 )
 
 // Service defines model for Service.
@@ -62,14 +62,8 @@ type RemoveServiceParams struct {
 	Id string `form:"id" json:"id"`
 }
 
-// AddServiceJSONRequestBody defines body for AddService for application/json ContentType.
-type AddServiceJSONRequestBody = Service
-
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Register a new service
-	// (POST /addService)
-	AddService(w http.ResponseWriter, r *http.Request)
 	// Get all registered services
 	// (GET /getServices)
 	GetServices(w http.ResponseWriter, r *http.Request)
@@ -89,26 +83,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// AddService operation middleware
-func (siw *ServerInterfaceWrapper) AddService(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "admin"})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddService(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // GetServices operation middleware
 func (siw *ServerInterfaceWrapper) GetServices(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +297,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("POST "+options.BaseURL+"/addService", wrapper.AddService)
 	m.HandleFunc("GET "+options.BaseURL+"/getServices", wrapper.GetServices)
 	m.HandleFunc("GET "+options.BaseURL+"/health", wrapper.CheckHealth)
 	m.HandleFunc("DELETE "+options.BaseURL+"/removeService", wrapper.RemoveService)
@@ -334,22 +307,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/6xWTW/cNhP+K8S876EF5NXaySHQzXWA1EBRBwl6MhYFTY5WjCmOQo7sqMb+92Ioab1f",
-	"Dpy2F68gzQyfj5mhn8BQ21HAwAmqJ0imwVbnx88YH5xBeewidRjZYf7grPzFb7rtPEIFaQw8O794AwXw",
-	"0OWXHF1Yw6aAoFs8SGCKeo1nU+KppD76/ZyGuavKckpduMAYg/bVu+W7JRRQU2w1QwV9dMf1NgVE/Nq7",
-	"iBaqWyEwwRoPWm0T6O4LGhYAE/tfUXtuXtLgCLbXia8aNPeYv29RWc14xq7F7wl09CGx5j4fh6FvBXmT",
-	"4QxQgMV11BaFiaXHsMNhh/QBKymJpo+Oh8/i80jlHgfjSd/fXPYj09rTY/6ie24our80OwpXZPHo5R9i",
-	"U/YmVWU5V1pMti0MtWVE7dtUrql1wdVD2UViMuRL6jA4e2YoBDRcSl0oIBnqRlzati5ABZfyq/J7VVNU",
-	"2Xpt2IW1enTcqByoOh3QQwFjWajgpsNw/V5djfXVnU7OKDkFAzuT4YvITPf4X/LI9fbUlzMvYCOvXKhJ",
-	"uFlMJrouY6jg8uN1ZtZ3VmdahkLt1n3MIJUOVrUUHJMYq7hBNfaBolpNM5QW0lmO86yMik0drC4/XkMB",
-	"DxjTeNr5Yrk4F+YCXHcOKnizWC5kijrNTda+1Nbuzj8lll+ZgIzp2uZjtjHjfGHiX8gOEmkoMIacpLvO",
-	"T3qXX5JAmNeMPP0/Yg0V/K983kPltITKuXqWbl+y3/Fxpq6YVMS1S4wRdgedY4958lNHIY1NdbE8P9Z/",
-	"Vkpbi1al3hhMqe69H8aZ6dtWxwEq+DQdo7QKzwByULlGnurkg9Z4QrEPOzFHwJY/pJtjbNOrBdw2o45R",
-	"D6cE/c0lln6alRQhZqj7InxAVtr7FyPLZrszT4qQ9+O0V6Xlom6RMSaobg+NuX6/0+Li8xp57n0ZmJ8o",
-	"R2r/M8hsQQVfe4zDvN2rcdM/i3a4IVf/0gQKeFNn3K9wYaK8KX7MvG3agYWrEyaOsUq2jFw8ecPteZe1",
-	"3wo6GZVNi9jSA+7MvEWPjMf2fdoLfJWBsrH2hlUqfM+x/Rn+Bw6enu/x4MMJL+Dt8u3LSYFY1dQHe7QL",
-	"pJjSQeE3l/LaTrv7ar5psyoHd+ztfEsV0y23EiKSPsvY711ITw0lFoE2pe7cnzmnlKWuo9N3fqQ+x4xU",
-	"at17+c/Dk9FePgmq1ebvAAAA//8zzoXI8AkAAA==",
+	"H4sIAAAAAAAC/6xVS2/cNhD+K8S0hxaQV2snh0A3wwHaBQo4aNCTsShoarRiliJpcuhENfa/F0NK633Y",
+	"gfu4WGtyhvM9OMMnUG7wzqKlCM0TRNXjIPPPzxgetUL+6YPzGEhj3tAt/8VvcvAGoYFYAi8ur95BBTT6",
+	"vEhB2w3sKrBywJMEckFu8GJKfCkpBXOc0xP5pq6n1IW2hMFK03xYflhCBZ0LgyRoIAV9ft6ugoAPSQds",
+	"obljAhOsUmi9T3D3X1ARA5jY/4rSUP+aBmewjYx006PaYt7fo2ol4QXpAb8n0NlGJEkpl0ObBkbeZzgj",
+	"VBC12kIFD0kTR69f4nxCik9ElYKm8TPbXJhscVTGye3tdSpEO+O+5h2ZqHdB/yVJO3vjWjxb/INdytbE",
+	"pq7nkxaTawvlhjqgNEOsN27QVndj7YMjp5ypnUer2wvlrEVFNZ/LtJTzBZdsB22hgWv+irwuOhdEdl4q",
+	"Zi2+aupFDhReWjRQQTkWGrj1aFcfxU05X9zLqJXgKmhJqwyfNSa3xf+TRz7vSH2ueQU7XtK2c8ytxaiC",
+	"9hlDA9efVplZ8q3MtJSznd6kkEEKaVsxOKvJsbGCehTlGgjXiamF4oIvlqbcKkWx6QKL608rqOARQyzV",
+	"LhfLxSUzZ+DSa2jg3WK54Cbykvqsfb1BmvLz/xsk/nADZEwrFviXgxjur+idjSX+arnkj3KW0OZU6b2Z",
+	"VK+/RAYyz5rcTYRDTvwxYAcN/FA/T6V6Gkn1PI+epZUhyLEoe6zobzoSqxNwoyNhwHYvVGmDNAwyjIWE",
+	"kMa8Gln3+wHwogi52achwQIGOSBhiNDcndq8+nhgmCAnNkizk2z/Ty5HSvMz8E2BBh4ShnEeVU0ZW8+i",
+	"nfb7+j+a4Czedhn3G1yYKO+qf2bePu3EwvULJpZYwT3DUzT365F3Wfu9oJNR2bSAg3vEgwesRYOE5/b9",
+	"fhT4JgO5/w5MLKW+59jzy0Mh4b9w8BjF3NelcCtiUgpj7JIxIwv7fvn+9STrSHQu2fZEyqKDkFbgNx3z",
+	"EJof593hu5FVOXkx7uaZW00ze81EOH2WMR2N16feRWKBdrX0+s+cU/OIkkHLe1OozzGFSieT4WfUOCUN",
+	"bzGq9e7vAAAA//92qvsUvQgAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -22,21 +22,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Service'
-
-  /addService:
-    post:
-      summary: Register a new service
-      operationId: addService
-      requestBody:
-        description: New service to register
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Service'
-      responses:
-        '201':
-          description: Service added successfully
+        401:
+          description: Must be Signed in to do this operation
+        403:
+          description: Must be an Admin to do this
 
   /removeService:
     delete:
@@ -54,6 +43,10 @@ paths:
           description: Service removed successfully
         '404':
           description: Service not found
+        401:
+          description: Must be Signed In
+        403:
+          description: Must be an Admin to do this operation
 
   /health:
     get:
@@ -63,9 +56,13 @@ paths:
         - name: id
           in: query
           description: ID of service to get health for (optional)
-          required: false
+          required: true
           schema:
             type: string
+        - name: serviceName
+          in: query
+          description: ServiceName where the service is apart of
+          required: true
       responses:
         '200':
           description: Health information
@@ -77,6 +74,12 @@ paths:
                   - type: array
                     items:
                       $ref: '#/components/schemas/ServiceHealth'
+        '404':
+          description: Unable to find service under that name
+        '401':
+          description: Requires login
+        '403':
+          description: Must be Admin to check this
 
 components:
   securitySchemes:
@@ -118,7 +121,7 @@ components:
           type: string
         status:
           type: string
-          enum: [healthy, degraded, down]
+          enum: [healthy, sick, quiting]
         lastChecked:
           type: string
           format: date-time
