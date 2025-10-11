@@ -55,9 +55,11 @@ type DiscoveryClient struct {
 	dialAddr  string
 }
 
+type Option func(*DiscoveryClient) error
+
 type option func(*DiscoveryClient) error
 
-func withSecure(certFile, keyFile, caFile string) option {
+func WithSecure(certFile, keyFile, caFile string) Option {
 	return func(c *DiscoveryClient) error {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
@@ -89,21 +91,21 @@ func withSecure(certFile, keyFile, caFile string) option {
 	}
 }
 
-func withTTL(ttl time.Duration) option {
+func WithTTL(ttl time.Duration) Option {
 	return func(c *DiscoveryClient) error {
 		c.ttl = ttl
 		return nil
 	}
 }
 
-func withErrorBuffer(bufferSize int) option {
+func WithErrorBuffer(bufferSize int) Option {
 	return func(c *DiscoveryClient) error {
 		c.errorChan = make(chan error, bufferSize)
 		return nil
 	}
 }
 
-func NewQueryClient(addr string, opt ...option) (*DiscoveryClient, error) {
+func NewQueryClient(addr string, opt ...Option) (*DiscoveryClient, error) {
 	if len(addr) == 0 {
 		return nil, errors.New("discovery address is empty")
 	}
@@ -136,7 +138,7 @@ func NewQueryClient(addr string, opt ...option) (*DiscoveryClient, error) {
 }
 
 // NewDiscoveryClient do not use in prod, sets up a client to use weak credentials, good for testing
-func NewDiscoveryClient(addr string, serviceDisc Service, opts ...option) (*DiscoveryClient, error) {
+func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*DiscoveryClient, error) {
 	if len(addr) == 0 {
 		return nil, errors.New("address is empty")
 	}
