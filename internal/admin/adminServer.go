@@ -150,28 +150,13 @@ const (
 	Quiting  = proto.NodeStatus_QUITING
 )
 
-type serviceWithRegInfo struct {
-	serviceName   string
-	serviceId     string
-	serviceHealth NodeHealth
-	nonce         uint64
-	lease         *Lease
-	seqNum        uint64
-}
-
 type GrpcAdminServer struct {
 	proto.UnimplementedDiscoveryServer
-	grpcServer         *grpc.Server
-	tlsConfig          *tls.Config
-	address            string
-	serviceListMap     map[string][]*serviceWithRegInfo
-	serviceLookup      map[string]*serviceWithRegInfo
-	contextMap         map[string]context.Context
-	rwServiceList      sync.RWMutex
-	rwServiceLookupMap sync.RWMutex
-	rwContextMap       sync.RWMutex
-	leaseManager       *LeaseManager
-	leaseDuration      time.Duration
+	grpcServer    *grpc.Server
+	tlsConfig     *tls.Config
+	address       string
+	leaseManager  *LeaseManager
+	leaseDuration time.Duration
 }
 
 type HTTPOption func(*HTTPAdminServer) error
@@ -232,12 +217,6 @@ func NewGrpcAdminServer(addr string, opts ...Option) (*GrpcAdminServer, error) {
 	adminServer.grpcServer = grpc.NewServer(grpcOpts...)
 	proto.RegisterDiscoveryServer(adminServer.grpcServer, adminServer)
 	adminServer.address = addr
-	adminServer.serviceListMap = make(map[string][]*serviceWithRegInfo)
-	adminServer.serviceLookup = make(map[string]*serviceWithRegInfo)
-	adminServer.contextMap = make(map[string]context.Context)
-	adminServer.rwServiceList = sync.RWMutex{}
-	adminServer.rwServiceLookupMap = sync.RWMutex{}
-	adminServer.rwContextMap = sync.RWMutex{}
 	adminServer.leaseManager = NewLeaseManager(adminServer.leaseDuration)
 	return adminServer, nil
 }
@@ -248,15 +227,6 @@ func (s *GrpcAdminServer) ListenAndServe() error {
 		return err
 	}
 	return s.grpcServer.Serve(lis)
-}
-
-func (s *GrpcAdminServer) getLeaseOfService(instanceId string) *Lease {
-	s.rwServiceLookupMap.RLock()
-	defer s.rwServiceLookupMap.RUnlock()
-	if data, ok := s.serviceLookup[instanceId]; ok {
-		return data.lease
-	}
-	return nil
 }
 
 func (s *GrpcAdminServer) cleanUpAfterDeRegistration() {}
@@ -273,6 +243,7 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 		return nil, status.Errorf(codes.Unknown, "failed to generate nonce: %v", err)
 	}
 
+	// todo adhere to change regarding service manager being source of truth of existing services
 	cxt, cancelFunc := context.WithCancelCause(context.Background())
 
 	serviceRegInfo := &serviceWithRegInfo{
@@ -281,49 +252,32 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 		nonce:         binary.LittleEndian.Uint64(nonceBuf),
 		serviceHealth: Healthy,
 		seqNum:        0,
-		lease: &Lease{
-			mutex:     sync.Mutex{},
-			serviceId: regMsg.InstanceName,
-			lease:     time.Now().Add(s.leaseDuration),
-			ttl:       s.leaseDuration,
-			version:   0,
-			cancel:    cancelFunc,
-		},
 	}
-	s.rwServiceList.Lock()
 	s.serviceListMap[regMsg.ServiceName] = append(s.serviceListMap[regMsg.ServiceName], serviceRegInfo)
-	s.rwServiceList.Unlock()
 
-	s.rwServiceLookupMap.Lock()
 	s.serviceLookup[regMsg.InstanceName] = serviceRegInfo
-	s.rwServiceLookupMap.Unlock()
 
-	s.rwContextMap.Lock()
 	s.contextMap[regMsg.InstanceName] = cxt
-	s.rwContextMap.Unlock()
 
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
 }
 func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartBeat, proto.HeartBeatResponse]) error {
-	/*
-		todo add a defer statement to clean up lease info after this func closes
-			or at least invoke a clean up from exit paths depending on what context closed
-	*/
+	// todo fix errors with change regarding moving to
 	// need to get service name
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
 	if err != nil {
 		return status.Error(codes.Unknown, err.Error())
 	}
-	s.rwContextMap.RLock()
+
 	cxt, ok := s.contextMap[msg.InstanceName]
-	s.rwContextMap.RUnlock()
+
 	if !ok {
 		return status.Error(codes.NotFound, "instance not found")
 	}
-	s.rwServiceLookupMap.RLock()
+
 	service, ok := s.serviceLookup[msg.InstanceName]
-	s.rwServiceLookupMap.RUnlock()
+
 	if !ok {
 		return status.Error(codes.NotFound, "instance not found")
 	}
