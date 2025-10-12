@@ -60,7 +60,7 @@ func LoadAuthMiddleWare(swagger *openapi3.T, clientID string, rules ...ErrorRule
 							return
 						}
 					}
-					http.Error(w, "Security Check Failed", http.StatusInternalServerError)
+					http.Error(w, "Security Check Failed", opts.StatusCode)
 					return
 				}
 			}

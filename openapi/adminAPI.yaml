@@ -100,6 +100,7 @@ components:
         - id
         - name
         - url
+        - leaseInformation
       properties:
         id:
           type: string
@@ -111,6 +112,9 @@ components:
           type: string
           format: uri
           example: http://storage.internal:8080
+        leaseInformation:
+          type: string
+          format: date-time
 
     ServiceHealth:
       type: object

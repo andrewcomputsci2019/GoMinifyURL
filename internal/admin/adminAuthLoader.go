@@ -7,10 +7,12 @@ import (
 	"net/http"
 )
 
-func getAuthHandler() (func(handler http.Handler) http.Handler, error) {
+// getAuthHandler Register the auth middleware. The rules parameter allows the caller to register validation handling
+// for request body error handling etc
+func getAuthHandler(rules ...auth.ErrorRule) (func(handler http.Handler) http.Handler, error) {
 	spec, err := admin.GetSwagger()
 	if err != nil {
 		return nil, err
 	}
-	return auth.LoadAuthMiddleWare(spec, servicenames.AdminServiceName)
+	return auth.LoadAuthMiddleWare(spec, servicenames.AdminServiceName, rules...)
 }
