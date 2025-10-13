@@ -180,6 +180,26 @@ func (lm *LeaseManager) cleanUpService(serviceId string) {
 	lm.rwLeaseMap.Unlock()
 }
 
+func (lm *LeaseManager) getServiceSequenceStart(serviceId string) (uint64, error) {
+	lm.rwServiceLookupMap.RLock()
+	defer lm.rwServiceLookupMap.RUnlock()
+	service, ok := lm.serviceLookup[serviceId]
+	if !ok {
+		return 0, fmt.Errorf("service not found")
+	}
+	return service.seqNum, nil
+}
+
+func (lm *LeaseManager) getServiceNonce(serviceId string) (uint64, error) {
+	lm.rwServiceLookupMap.RLock()
+	defer lm.rwServiceLookupMap.RUnlock()
+	service, ok := lm.serviceLookup[serviceId]
+	if !ok {
+		return 0, fmt.Errorf("service not found")
+	}
+	return service.nonce, nil
+}
+
 func (lm *LeaseManager) GetServiceInfo(serviceId string) (ServiceInstanceSpecificData, error) {
 
 	lm.rwServiceLookupMap.RLock()
