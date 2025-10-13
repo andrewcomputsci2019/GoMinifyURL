@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -150,28 +149,13 @@ const (
 	Quiting  = proto.NodeStatus_QUITING
 )
 
-type serviceWithRegInfo struct {
-	serviceName   string
-	serviceId     string
-	serviceHealth NodeHealth
-	nonce         uint64
-	lease         *Lease
-	seqNum        uint64
-}
-
 type GrpcAdminServer struct {
 	proto.UnimplementedDiscoveryServer
-	grpcServer         *grpc.Server
-	tlsConfig          *tls.Config
-	address            string
-	serviceListMap     map[string][]*serviceWithRegInfo
-	serviceLookup      map[string]*serviceWithRegInfo
-	contextMap         map[string]context.Context
-	rwServiceList      sync.RWMutex
-	rwServiceLookupMap sync.RWMutex
-	rwContextMap       sync.RWMutex
-	leaseManager       *LeaseManager
-	leaseDuration      time.Duration
+	grpcServer    *grpc.Server
+	tlsConfig     *tls.Config
+	address       string
+	leaseManager  *LeaseManager
+	leaseDuration time.Duration
 }
 
 type HTTPOption func(*HTTPAdminServer) error
@@ -232,12 +216,6 @@ func NewGrpcAdminServer(addr string, opts ...Option) (*GrpcAdminServer, error) {
 	adminServer.grpcServer = grpc.NewServer(grpcOpts...)
 	proto.RegisterDiscoveryServer(adminServer.grpcServer, adminServer)
 	adminServer.address = addr
-	adminServer.serviceListMap = make(map[string][]*serviceWithRegInfo)
-	adminServer.serviceLookup = make(map[string]*serviceWithRegInfo)
-	adminServer.contextMap = make(map[string]context.Context)
-	adminServer.rwServiceList = sync.RWMutex{}
-	adminServer.rwServiceLookupMap = sync.RWMutex{}
-	adminServer.rwContextMap = sync.RWMutex{}
 	adminServer.leaseManager = NewLeaseManager(adminServer.leaseDuration)
 	return adminServer, nil
 }
@@ -248,15 +226,6 @@ func (s *GrpcAdminServer) ListenAndServe() error {
 		return err
 	}
 	return s.grpcServer.Serve(lis)
-}
-
-func (s *GrpcAdminServer) getLeaseOfService(instanceId string) *Lease {
-	s.rwServiceLookupMap.RLock()
-	defer s.rwServiceLookupMap.RUnlock()
-	if data, ok := s.serviceLookup[instanceId]; ok {
-		return data.lease
-	}
-	return nil
 }
 
 func (s *GrpcAdminServer) cleanUpAfterDeRegistration() {}
@@ -273,61 +242,39 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 		return nil, status.Errorf(codes.Unknown, "failed to generate nonce: %v", err)
 	}
 
-	cxt, cancelFunc := context.WithCancelCause(context.Background())
-
-	serviceRegInfo := &serviceWithRegInfo{
+	serviceRegInfo := &ServiceWithRegInfo{
 		serviceName:   regMsg.ServiceName,
 		serviceId:     regMsg.InstanceName,
+		address:       regMsg.DialAddr,
 		nonce:         binary.LittleEndian.Uint64(nonceBuf),
 		serviceHealth: Healthy,
 		seqNum:        0,
-		lease: &Lease{
-			mutex:     sync.Mutex{},
-			serviceId: regMsg.InstanceName,
-			lease:     time.Now().Add(s.leaseDuration),
-			ttl:       s.leaseDuration,
-			version:   0,
-			cancel:    cancelFunc,
-		},
 	}
-	s.rwServiceList.Lock()
-	s.serviceListMap[regMsg.ServiceName] = append(s.serviceListMap[regMsg.ServiceName], serviceRegInfo)
-	s.rwServiceList.Unlock()
-
-	s.rwServiceLookupMap.Lock()
-	s.serviceLookup[regMsg.InstanceName] = serviceRegInfo
-	s.rwServiceLookupMap.Unlock()
-
-	s.rwContextMap.Lock()
-	s.contextMap[regMsg.InstanceName] = cxt
-	s.rwContextMap.Unlock()
+	err := s.leaseManager.AddService(serviceRegInfo)
+	if err != nil {
+		return nil, err
+	}
 
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
 }
 func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartBeat, proto.HeartBeatResponse]) error {
-	/*
-		todo add a defer statement to clean up lease info after this func closes
-			or at least invoke a clean up from exit paths depending on what context closed
-	*/
 	// need to get service name
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
 	if err != nil {
 		return status.Error(codes.Unknown, err.Error())
 	}
-	s.rwContextMap.RLock()
-	cxt, ok := s.contextMap[msg.InstanceName]
-	s.rwContextMap.RUnlock()
-	if !ok {
+
+	cxt, err := s.leaseManager.GetContext(msg.InstanceName)
+	if err != nil {
 		return status.Error(codes.NotFound, "instance not found")
 	}
-	s.rwServiceLookupMap.RLock()
-	service, ok := s.serviceLookup[msg.InstanceName]
-	s.rwServiceLookupMap.RUnlock()
-	if !ok {
+
+	seqNumVerrifer, err := s.leaseManager.getServiceSequenceStart(msg.InstanceName)
+	if err != nil {
 		return status.Error(codes.NotFound, "instance not found")
 	}
-	seqNumVerrifer := service.seqNum
+	// todo finish work on handling updates from the client
 	msgChan := make(chan *proto.HeartBeat)
 	errChan := make(chan error, 1)
 	go func() {
@@ -363,9 +310,43 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 		}
 	}
 }
-func (s *GrpcAdminServer) RequestServiceList(context.Context, *proto.ServiceListRequest) (*proto.ServiceListResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RequestServiceList not implemented")
+func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto.ServiceListRequest) (*proto.ServiceListResponse, error) {
+
+	list, err := s.leaseManager.GetServiceList(message.ServiceName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not get service list: %v", err)
+	}
+	// dont continue if job finished during fetching of services
+	select {
+	case <-cxt.Done():
+		return nil, status.Error(codes.Canceled, cxt.Err().Error())
+	default:
+	}
+	ptrList := make([]*proto.ServiceInfo, 0, len(list))
+	for _, service := range list {
+
+		ptrList = append(ptrList, &proto.ServiceInfo{
+			ServiceName:  service.serviceName,
+			InstanceName: service.serviceId,
+			DialAddr:     service.address,
+			LatestStatus: service.serviceHealth,
+		})
+	}
+	resp := &proto.ServiceListResponse{
+		Instances: ptrList,
+	}
+	return resp, nil
 }
-func (s *GrpcAdminServer) DeRegisterService(context.Context, *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeRegisterService not implemented")
+func (s *GrpcAdminServer) DeRegisterService(cxt context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
+	if serviceNonce, err := s.leaseManager.getServiceNonce(deregMsg.InstanceName); err != nil {
+		return nil, err
+	} else {
+		if serviceNonce != deregMsg.Nonce {
+			return nil, status.Error(codes.FailedPrecondition, "nonce mismatch")
+		}
+		s.leaseManager.RemoveServiceNonBlock(deregMsg.InstanceName)
+		return &proto.DeRegistrationResponse{
+			Success: true,
+		}, nil
+	}
 }

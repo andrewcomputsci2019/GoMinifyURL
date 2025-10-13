@@ -29,7 +29,7 @@ type Service struct {
 
 type ServiceWithRegInfo struct {
 	serviceDisc Service
-	nonce       int64
+	nonce       uint64
 }
 type serviceCacheItem struct {
 	services []Service
