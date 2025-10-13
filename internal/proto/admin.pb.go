@@ -137,7 +137,7 @@ type RegistrationResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// this time is the amount of time a service has to
 	RequestTtl    int32  `protobuf:"varint,1,opt,name=request_ttl,json=requestTtl,proto3" json:"request_ttl,omitempty"`
-	SeqStart      int64  `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
+	SeqStart      uint64 `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
 	Nonce         uint64 `protobuf:"varint,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -180,7 +180,7 @@ func (x *RegistrationResponse) GetRequestTtl() int32 {
 	return 0
 }
 
-func (x *RegistrationResponse) GetSeqStart() int64 {
+func (x *RegistrationResponse) GetSeqStart() uint64 {
 	if x != nil {
 		return x.SeqStart
 	}
@@ -292,7 +292,7 @@ func (x *DeRegistrationResponse) GetSuccess() bool {
 
 type HeartBeat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SeqNumber     int64                  `protobuf:"varint,1,opt,name=seqNumber,proto3" json:"seqNumber,omitempty"`
+	SeqNumber     uint64                 `protobuf:"varint,1,opt,name=seqNumber,proto3" json:"seqNumber,omitempty"`
 	InstanceName  string                 `protobuf:"bytes,2,opt,name=instanceName,proto3" json:"instanceName,omitempty"`
 	Status        NodeStatus             `protobuf:"varint,3,opt,name=status,proto3,enum=NodeStatus" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -329,7 +329,7 @@ func (*HeartBeat) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *HeartBeat) GetSeqNumber() int64 {
+func (x *HeartBeat) GetSeqNumber() uint64 {
 	if x != nil {
 		return x.SeqNumber
 	}
@@ -633,7 +633,7 @@ const file_admin_proto_rawDesc = "" +
 	"\x14registrationResponse\x12\x1f\n" +
 	"\vrequest_ttl\x18\x01 \x01(\x05R\n" +
 	"requestTtl\x12\x1a\n" +
-	"\bseqStart\x18\x02 \x01(\x03R\bseqStart\x12\x14\n" +
+	"\bseqStart\x18\x02 \x01(\x04R\bseqStart\x12\x14\n" +
 	"\x05nonce\x18\x03 \x01(\x04R\x05nonce\"Q\n" +
 	"\x15deRegistrationMessage\x12\"\n" +
 	"\finstanceName\x18\x01 \x01(\tR\finstanceName\x12\x14\n" +
@@ -641,7 +641,7 @@ const file_admin_proto_rawDesc = "" +
 	"\x16deRegistrationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"r\n" +
 	"\tHeartBeat\x12\x1c\n" +
-	"\tseqNumber\x18\x01 \x01(\x03R\tseqNumber\x12\"\n" +
+	"\tseqNumber\x18\x01 \x01(\x04R\tseqNumber\x12\"\n" +
 	"\finstanceName\x18\x02 \x01(\tR\finstanceName\x12#\n" +
 	"\x06status\x18\x03 \x01(\x0e2\v.NodeStatusR\x06status\"\xda\x01\n" +
 	"\x11HeartBeatResponse\x12\x10\n" +

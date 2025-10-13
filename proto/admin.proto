@@ -21,7 +21,7 @@ message registrationMessage {
 message registrationResponse{
   // this time is the amount of time a service has to
   int32 request_ttl = 1;
-  int64 seqStart = 2;
+  uint64 seqStart = 2;
   uint64 nonce = 3;
 }
 
@@ -35,7 +35,7 @@ message deRegistrationResponse {
 }
 
 message HeartBeat {
-  int64 seqNumber     = 1;
+  uint64 seqNumber     = 1;
   string instanceName = 2;
   NodeStatus status   = 3;
 }

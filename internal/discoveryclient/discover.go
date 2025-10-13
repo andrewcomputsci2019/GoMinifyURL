@@ -185,13 +185,13 @@ func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*Disc
 	return dClient, nil
 }
 
-func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum int64) {
+func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
 	c.startHeartBeatTask(cxt, service, heartbeat, seqNum)
 	c.startExpireSweep(cxt)
 
 }
 
-func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat int, seqNum int64) {
+func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
 	c.wg.Add(1)
 	go c.heartbeatLoop(service, cxt, seqNum, heartbeat)
 }
@@ -248,7 +248,7 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 	return regMessage, nil
 }
 
-func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber int64, heartbeatTime int) {
+func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
 	// this code should run in its own go func
 	// is responsible for making sure clients receive
 	stream, err := c.client.Heartbeat(cxt)
@@ -339,7 +339,7 @@ func (c *DiscoveryClient) fetchServiceListAndAdd(serviceName string, cacheTTL ti
 	return fetchedList, nil
 }
 
-func (c *DiscoveryClient) getServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error) {
+func (c *DiscoveryClient) GetServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
 		add, err := c.fetchServiceListAndAdd(serviceName, cacheTime)
@@ -360,7 +360,7 @@ func (c *DiscoveryClient) getServiceListAndSaveFor(serviceName string, cacheTime
 	return listCopy, nil
 }
 
-func (c *DiscoveryClient) getServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error) {
+func (c *DiscoveryClient) GetServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil || time.Now().After(res.expires) || time.Since(res.inserted) > ttlRequirement {
 		// fetch updated list of services
@@ -377,7 +377,7 @@ func (c *DiscoveryClient) getServiceListWithTTL(serviceName string, ttlRequireme
 	return listCopy, nil
 }
 
-func (c *DiscoveryClient) getServiceList(serviceName string) ([]Service, error) {
+func (c *DiscoveryClient) GetServiceList(serviceName string) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
 		add, err := c.fetchServiceListAndAdd(serviceName, c.ttl)
