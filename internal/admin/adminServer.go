@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -243,26 +242,22 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 		return nil, status.Errorf(codes.Unknown, "failed to generate nonce: %v", err)
 	}
 
-	// todo adhere to change regarding service manager being source of truth of existing services
-	cxt, cancelFunc := context.WithCancelCause(context.Background())
-
-	serviceRegInfo := &serviceWithRegInfo{
+	serviceRegInfo := &ServiceWithRegInfo{
 		serviceName:   regMsg.ServiceName,
 		serviceId:     regMsg.InstanceName,
+		address:       regMsg.DialAddr,
 		nonce:         binary.LittleEndian.Uint64(nonceBuf),
 		serviceHealth: Healthy,
 		seqNum:        0,
 	}
-	s.serviceListMap[regMsg.ServiceName] = append(s.serviceListMap[regMsg.ServiceName], serviceRegInfo)
-
-	s.serviceLookup[regMsg.InstanceName] = serviceRegInfo
-
-	s.contextMap[regMsg.InstanceName] = cxt
+	err := s.leaseManager.AddService(serviceRegInfo)
+	if err != nil {
+		return nil, err
+	}
 
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
 }
 func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartBeat, proto.HeartBeatResponse]) error {
-	// todo fix errors with change regarding moving to
 	// need to get service name
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
@@ -270,18 +265,16 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 		return status.Error(codes.Unknown, err.Error())
 	}
 
-	cxt, ok := s.contextMap[msg.InstanceName]
-
-	if !ok {
+	cxt, err := s.leaseManager.GetContext(msg.InstanceName)
+	if err != nil {
 		return status.Error(codes.NotFound, "instance not found")
 	}
 
-	service, ok := s.serviceLookup[msg.InstanceName]
-
-	if !ok {
+	seqNumVerrifer, err := s.leaseManager.getServiceSequenceStart(msg.InstanceName)
+	if err != nil {
 		return status.Error(codes.NotFound, "instance not found")
 	}
-	seqNumVerrifer := service.seqNum
+	// todo finish work on handling updates from the client
 	msgChan := make(chan *proto.HeartBeat)
 	errChan := make(chan error, 1)
 	go func() {
@@ -317,9 +310,43 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 		}
 	}
 }
-func (s *GrpcAdminServer) RequestServiceList(context.Context, *proto.ServiceListRequest) (*proto.ServiceListResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RequestServiceList not implemented")
+func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto.ServiceListRequest) (*proto.ServiceListResponse, error) {
+
+	list, err := s.leaseManager.GetServiceList(message.ServiceName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "could not get service list: %v", err)
+	}
+	// dont continue if job finished during fetching of services
+	select {
+	case <-cxt.Done():
+		return nil, status.Error(codes.Canceled, cxt.Err().Error())
+	default:
+	}
+	ptrList := make([]*proto.ServiceInfo, 0, len(list))
+	for _, service := range list {
+
+		ptrList = append(ptrList, &proto.ServiceInfo{
+			ServiceName:  service.serviceName,
+			InstanceName: service.serviceId,
+			DialAddr:     service.address,
+			LatestStatus: service.serviceHealth,
+		})
+	}
+	resp := &proto.ServiceListResponse{
+		Instances: ptrList,
+	}
+	return resp, nil
 }
-func (s *GrpcAdminServer) DeRegisterService(context.Context, *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeRegisterService not implemented")
+func (s *GrpcAdminServer) DeRegisterService(cxt context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
+	if serviceNonce, err := s.leaseManager.getServiceNonce(deregMsg.InstanceName); err != nil {
+		return nil, err
+	} else {
+		if serviceNonce != deregMsg.Nonce {
+			return nil, status.Error(codes.FailedPrecondition, "nonce mismatch")
+		}
+		s.leaseManager.RemoveServiceNonBlock(deregMsg.InstanceName)
+		return &proto.DeRegistrationResponse{
+			Success: true,
+		}, nil
+	}
 }
