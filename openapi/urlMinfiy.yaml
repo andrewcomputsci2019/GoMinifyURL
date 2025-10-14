@@ -6,7 +6,7 @@ info:
     A minimal URL shortening service. Uses Keycloak for authentication.
 
 servers:
-  - url: https://{hostname}/api
+  - url: https://{hostname}/go
     variables:
       hostname:
         default: localhost
@@ -45,14 +45,14 @@ paths:
         '400':
           description: Invalid input
 
-  /:
+  /{url}:
     get:
       summary: Redirect to long URL
       security: []
       description: Public endpoint that redirects users from a short slug.
       operationId: redirect
       parameters:
-        - in: query
+        - in: path
           name: url
           required: true
           schema:

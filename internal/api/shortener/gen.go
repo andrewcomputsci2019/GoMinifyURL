@@ -24,11 +24,6 @@ const (
 	KeycloakOAuthScopes = "keycloakOAuth.Scopes"
 )
 
-// RedirectParams defines parameters for Redirect.
-type RedirectParams struct {
-	Url string `form:"url" json:"url"`
-}
-
 // ShrinkUrlJSONBody defines parameters for ShrinkUrl.
 type ShrinkUrlJSONBody struct {
 	Url string `json:"url"`
@@ -39,12 +34,12 @@ type ShrinkUrlJSONRequestBody ShrinkUrlJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Redirect to long URL
-	// (GET /)
-	Redirect(w http.ResponseWriter, r *http.Request, params RedirectParams)
 	// Shorten a URL
 	// (POST /shrink)
 	ShrinkUrl(w http.ResponseWriter, r *http.Request)
+	// Redirect to long URL
+	// (GET /{url})
+	Redirect(w http.ResponseWriter, r *http.Request, url string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -55,40 +50,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// Redirect operation middleware
-func (siw *ServerInterfaceWrapper) Redirect(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RedirectParams
-
-	// ------------- Required query parameter "url" -------------
-
-	if paramValue := r.URL.Query().Get("url"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "url"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "url", r.URL.Query(), &params.Url)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Redirect(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // ShrinkUrl operation middleware
 func (siw *ServerInterfaceWrapper) ShrinkUrl(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +62,31 @@ func (siw *ServerInterfaceWrapper) ShrinkUrl(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ShrinkUrl(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Redirect operation middleware
+func (siw *ServerInterfaceWrapper) Redirect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "url" -------------
+	var url string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "url", r.PathValue("url"), &url, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Redirect(w, r, url)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -230,8 +216,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/", wrapper.Redirect)
 	m.HandleFunc("POST "+options.BaseURL+"/shrink", wrapper.ShrinkUrl)
+	m.HandleFunc("GET "+options.BaseURL+"/{url}", wrapper.Redirect)
 
 	return m
 }
@@ -239,18 +225,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"H4sIAAAAAAAC/6xUTW/kNgz9KwLPrj3J7sm3tIci6Ndig5zSQaHInLE2sqhSVLbuYP57QXm8k2RyKNDe",
+	"DEl+fHzvkQdwNCWKGCVDf4CMrrCX+c6NOGE9esLZBbJPv90UGfVgF+hrvbFFRmL/txVP8Qca8OLwngP0",
+	"MIqk3HfditTiX3ZKAVtHU8dow5S7PU0++t1cOHSJSchR6Chh9MN3jmJEJ51CQwPZUVqoLffQw41zmLOZ",
+	"qbDxA0bxMkMDhUP/lb2gPnn0wctshEwqYgqHbHwUMnnOghMcGxB6wv+ZcoWEo4LPSWmQNnENRz3ycUfa",
+	"xoDZsU8qmBI1CjvZYO4//2zySCwYfdybjPzsHbbmPmM2P52YmR2xUVDt2lXV298jNCBeglb8kX6pNBXt",
+	"rqKxufl0Cw08I+el5lW7aa9UAqVvk4cePrSbdgMNJCtjFbvLI/v4pJ+JsrxD/EwCB1MycjbOxrUFY02g",
+	"uNeuWqiVuLK9VQPvKrZq3wDjnwWzfE/DrEUcRcFY69mUwqnH7kvWogfImlRbWbFiil+yUdTHA+yIJyvQ",
+	"Q2EP31zIwj7uqy9azTMO0D/Uf7Znqx6/oJPFqvMr4YL1ICeKeal1vdn8B6ZVnz9OfC8JvsPmte6LqRGH",
+	"GhjHqPqrmR8XWq9f38ZnG/xgfExFlldXl6/u4zrHCnVsvi0G6B8uVsLDOogvJ2573DaQyzRZns8kjVWS",
+	"FbE7FA5HLb3Hd9L0qTwG7wzGIZGPYmS0YhgHz+gkn+K1Y5qMXRJmcij7y2R9Pv1So8x2QkHOtQuvZTTe",
+	"0EC0E9aQrAE8m928MO6tO9s3Qfiwub7sZGWgq4fY731cZnsR/+PlD7+SmB2VeKH8K0Vfwq6DtcTjX3m1",
+	"+IP8vMpRXi2+w0hZVJVjtyfdFZa9fQxLm+vdQn1nS9AJC+Rs0CtlsT3+EwAA//8utDBeWwYAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

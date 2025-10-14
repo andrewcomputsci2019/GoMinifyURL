@@ -26,10 +26,28 @@ paths:
           description: Must be Signed in to do this operation
         403:
           description: Must be an Admin to do this
-
+  /getServiceList/{serviceClass}:
+    get:
+      summary: Get services of a single class/instance
+      operationId: getServiceList
+      parameters:
+        - name: serviceClass
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Returns list of all services of instance of service class passed in
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
   /removeService:
     delete:
-      summary: Remove an existing service
+      summary: Remove an existing service instance
       operationId: removeService
       parameters:
         - name: id
@@ -48,31 +66,29 @@ paths:
         403:
           description: Must be an Admin to do this operation
 
-  /health:
+  /serviceInfo:
     get:
       summary: Check service health
-      operationId: checkHealth
+      operationId: getServiceInfo
       parameters:
-        - name: id
+        - name: instanceId
           in: query
-          description: ID of service to get health for (optional)
+          description: ID of service to get information about
           required: true
           schema:
             type: string
-        - name: serviceName
-          in: query
-          description: ServiceName where the service is apart of
-          required: true
       responses:
         '200':
           description: Health information
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/ServiceHealth'
-                  - type: array
-                    items:
+                type: object
+                items:
+                  properties:
+                    serviceInfo:
+                      $ref: '#/components/schemas/Service'
+                    serviceHealth:
                       $ref: '#/components/schemas/ServiceHealth'
         '404':
           description: Unable to find service under that name
@@ -108,25 +124,26 @@ components:
         name:
           type: string
           example: storage-service
+          description: name of the service class
         url:
           type: string
           format: uri
           example: http://storage.internal:8080
-        leaseInformation:
-          type: string
-          format: date-time
 
     ServiceHealth:
       type: object
       properties:
         id:
           type: string
+          example: service-123
         name:
           type: string
+          example: storage-service
+          description: name of the service class
         status:
           type: string
           enum: [healthy, sick, quiting]
-        lastChecked:
+        leaseInformation:
           type: string
           format: date-time
 

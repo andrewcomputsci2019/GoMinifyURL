@@ -34,27 +34,25 @@ const (
 
 // Service defines model for Service.
 type Service struct {
-	Id   string `json:"id"`
+	Id string `json:"id"`
+
+	// Name name of the service class
 	Name string `json:"name"`
 	Url  string `json:"url"`
 }
 
 // ServiceHealth defines model for ServiceHealth.
 type ServiceHealth struct {
-	Id          *string              `json:"id,omitempty"`
-	LastChecked *time.Time           `json:"lastChecked,omitempty"`
-	Name        *string              `json:"name,omitempty"`
-	Status      *ServiceHealthStatus `json:"status,omitempty"`
+	Id               *string    `json:"id,omitempty"`
+	LeaseInformation *time.Time `json:"leaseInformation,omitempty"`
+
+	// Name name of the service class
+	Name   *string              `json:"name,omitempty"`
+	Status *ServiceHealthStatus `json:"status,omitempty"`
 }
 
 // ServiceHealthStatus defines model for ServiceHealth.Status.
 type ServiceHealthStatus string
-
-// CheckHealthParams defines parameters for CheckHealth.
-type CheckHealthParams struct {
-	// Id ID of service to get health for (optional)
-	Id *string `form:"id,omitempty" json:"id,omitempty"`
-}
 
 // RemoveServiceParams defines parameters for RemoveService.
 type RemoveServiceParams struct {
@@ -62,17 +60,26 @@ type RemoveServiceParams struct {
 	Id string `form:"id" json:"id"`
 }
 
+// GetServiceInfoParams defines parameters for GetServiceInfo.
+type GetServiceInfoParams struct {
+	// InstanceId ID of service to get information about
+	InstanceId string `form:"instanceId" json:"instanceId"`
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get services of a single class/instance
+	// (GET /getServiceList/{serviceClass})
+	GetServiceList(w http.ResponseWriter, r *http.Request, serviceClass string)
 	// Get all registered services
 	// (GET /getServices)
 	GetServices(w http.ResponseWriter, r *http.Request)
-	// Check service health
-	// (GET /health)
-	CheckHealth(w http.ResponseWriter, r *http.Request, params CheckHealthParams)
-	// Remove an existing service
+	// Remove an existing service instance
 	// (DELETE /removeService)
 	RemoveService(w http.ResponseWriter, r *http.Request, params RemoveServiceParams)
+	// Check service health
+	// (GET /serviceInfo)
+	GetServiceInfo(w http.ResponseWriter, r *http.Request, params GetServiceInfoParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -83,6 +90,37 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetServiceList operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "serviceClass" -------------
+	var serviceClass string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "serviceClass", r.PathValue("serviceClass"), &serviceClass, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceClass", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "admin"})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceList(w, r, serviceClass)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetServices operation middleware
 func (siw *ServerInterfaceWrapper) GetServices(w http.ResponseWriter, r *http.Request) {
@@ -95,39 +133,6 @@ func (siw *ServerInterfaceWrapper) GetServices(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetServices(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CheckHealth operation middleware
-func (siw *ServerInterfaceWrapper) CheckHealth(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "admin"})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CheckHealthParams
-
-	// ------------- Optional query parameter "id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "id", r.URL.Query(), &params.Id)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CheckHealth(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -168,6 +173,46 @@ func (siw *ServerInterfaceWrapper) RemoveService(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveService(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServiceInfo operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceInfo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, KeycloakOAuthScopes, []string{"openid", "admin"})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServiceInfoParams
+
+	// ------------- Required query parameter "instanceId" -------------
+
+	if paramValue := r.URL.Query().Get("instanceId"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instanceId"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "instanceId", r.URL.Query(), &params.InstanceId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instanceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceInfo(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -297,9 +342,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/getServiceList/{serviceClass}", wrapper.GetServiceList)
 	m.HandleFunc("GET "+options.BaseURL+"/getServices", wrapper.GetServices)
-	m.HandleFunc("GET "+options.BaseURL+"/health", wrapper.CheckHealth)
 	m.HandleFunc("DELETE "+options.BaseURL+"/removeService", wrapper.RemoveService)
+	m.HandleFunc("GET "+options.BaseURL+"/serviceInfo", wrapper.GetServiceInfo)
 
 	return m
 }
@@ -307,21 +353,24 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/6xVS2/cNhD+K8S0hxaQV2snh0A3wwHaBQo4aNCTsShoarRiliJpcuhENfa/F0NK633Y",
-	"gfu4WGtyhvM9OMMnUG7wzqKlCM0TRNXjIPPPzxgetUL+6YPzGEhj3tAt/8VvcvAGoYFYAi8ur95BBTT6",
-	"vEhB2w3sKrBywJMEckFu8GJKfCkpBXOc0xP5pq6n1IW2hMFK03xYflhCBZ0LgyRoIAV9ft6ugoAPSQds",
-	"obljAhOsUmi9T3D3X1ARA5jY/4rSUP+aBmewjYx006PaYt7fo2ol4QXpAb8n0NlGJEkpl0ObBkbeZzgj",
-	"VBC12kIFD0kTR69f4nxCik9ElYKm8TPbXJhscVTGye3tdSpEO+O+5h2ZqHdB/yVJO3vjWjxb/INdytbE",
-	"pq7nkxaTawvlhjqgNEOsN27QVndj7YMjp5ypnUer2wvlrEVFNZ/LtJTzBZdsB22hgWv+irwuOhdEdl4q",
-	"Zi2+aupFDhReWjRQQTkWGrj1aFcfxU05X9zLqJXgKmhJqwyfNSa3xf+TRz7vSH2ueQU7XtK2c8ytxaiC",
-	"9hlDA9efVplZ8q3MtJSznd6kkEEKaVsxOKvJsbGCehTlGgjXiamF4oIvlqbcKkWx6QKL608rqOARQyzV",
-	"LhfLxSUzZ+DSa2jg3WK54Cbykvqsfb1BmvLz/xsk/nADZEwrFviXgxjur+idjSX+arnkj3KW0OZU6b2Z",
-	"VK+/RAYyz5rcTYRDTvwxYAcN/FA/T6V6Gkn1PI+epZUhyLEoe6zobzoSqxNwoyNhwHYvVGmDNAwyjIWE",
-	"kMa8Gln3+wHwogi52achwQIGOSBhiNDcndq8+nhgmCAnNkizk2z/Ty5HSvMz8E2BBh4ShnEeVU0ZW8+i",
-	"nfb7+j+a4Czedhn3G1yYKO+qf2bePu3EwvULJpZYwT3DUzT365F3Wfu9oJNR2bSAg3vEgwesRYOE5/b9",
-	"fhT4JgO5/w5MLKW+59jzy0Mh4b9w8BjF3NelcCtiUgpj7JIxIwv7fvn+9STrSHQu2fZEyqKDkFbgNx3z",
-	"EJof593hu5FVOXkx7uaZW00ze81EOH2WMR2N16feRWKBdrX0+s+cU/OIkkHLe1OozzGFSieT4WfUOCUN",
-	"bzGq9e7vAAAA//92qvsUvQgAAA==",
+	"H4sIAAAAAAAC/8xWTW/bOBP+KwTf96hYTtJDoVuQArsGumiRoKcgWDDUyJqGIhVymNZr+L8vhqQ/ZCdo",
+	"sF2ge4kcivP1PM+MZi21G0ZnwVKQzVoG3cOg0s9b8M+ogX+O3o3gCSG9wJb/wnc1jAZkI0O+eHZ+cSkr",
+	"SasxHZJHu5SbSlo1JCctBO1xJHRWNulUuE5QD6I4ENqoEGR16JqcV0s4Kzdech+9mabTE41NXRfTGVoC",
+	"b5Vp3s/fz2UlO+cHRbKR0eOpv00lPTxF9NDK5o5LLQXkQJU0oAIsbPbCpdzvfLiHr6CJcyrQ/Q7KUP/T",
+	"AJ6EbNb7KlpFcEY4wC+APpCimCoCGwfGq08Vr2QlA+pHWcmniMS3719C+gg39gg6eqTVLcswg/UIK22c",
+	"evx0FTOWnXHf0hsVqXce/0qgXLsWTg6/sDaSIEJT11tPs1LkTLuh9qDMEOqlG9Bit6pH78hpZ2o3gsX2",
+	"TDtrQVPNfrks7cacl2oHZDSv+CnSueicF0lvSnPV4htSL9JFMSoLrJ/sVjby0wh28UFcZ//iQQXUgqOA",
+	"JdSZaMbIPcK/WUfyN0GfY17IDR+h7dypXq4+L1JlcWxVKks72+Ey+pSkULYVg7NIjolNqsoyYI0V9YQZ",
+	"6wcpKSsjVnpEXH1eyEo+gw852vlsPjvnyjlxNaJs5OVsPuPWHRX1Cft6CVTsP2Kgel3CXLOKN3xjCcQP",
+	"7rqU5YIh/21ilRx6NQCBD7K5W8vEJwfZNv2uNa9Le+xnA/kIVRmXHOlY3fd8OYzOhiyXi/mcH9pZApty",
+	"U+NoCtH115Dbeu8PCYZk+H8PnWzk/+r9oK7LlK63I3rPpvJerTKZUxJvgKK3QRgMxMQoY3bk8P9oAymr",
+	"4YC0PBTEqEKAVmBWTYjDoPwqoznxoERAuzTFrN46TFYHhIU30JOh/g+h97Gg5mGJgcBDuyudzd/Nz0/b",
+	"5o8YSDyAuMWlTfgJcqJ1gnoMYld5Nr983VxZkRtmb/0CEUzni8kx+B4G9wwH3/MWDBCcMnAzuXjSH9ME",
+	"Fx+OPyLkRA4lq9xLTxH8at9M6Wv60y00zWI7RnLgVoSoNYTQRWNWb6Vm8Y9YOObw3evJWUeic9G2R8xl",
+	"vNk5fMeQZusWy2n7lNNFmc8/aJ907U3sHTC3BBK4XzKEenCRXiOyJLdof81MnK5T4XjbekPTl8tp5ZhA",
+	"+6aB8dLycjIzcohDTF/V402GMAjjlvhjMe6UqHvQj2UkvCLBL1Y9mERwh3Y3GES0LXhBvSKROJ3q8jr5",
+	"3d7tC1aHC1pS1NFqdrddbqqyHN0z4+xlK8E42WPWvQvE0Te1GvHPZFPzLqA8ctKJ3O2dXFmnouGt1zit",
+	"DL/irO43fwcAAP//AXePe8YMAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
