@@ -235,6 +235,22 @@ func (lm *LeaseManager) GetServiceInfo(serviceId string) (ServiceInstanceSpecifi
 	}, nil
 }
 
+func (lm *LeaseManager) GetAllServices() []ServiceWithRegInfo {
+	lm.rwServiceLookupMap.RLock()
+	defer lm.rwServiceLookupMap.RUnlock()
+	services := make([]ServiceWithRegInfo, 0)
+	for _, service := range lm.serviceLookup {
+		services = append(services, ServiceWithRegInfo{
+			serviceName:    service.serviceName,
+			serviceId:      service.serviceId,
+			serviceVersion: service.serviceVersion,
+			address:        service.address,
+			serviceHealth:  service.serviceHealth,
+		})
+	}
+	return services
+}
+
 func (lm *LeaseManager) GetServiceList(serviceName string) ([]ServiceWithRegInfo, error) {
 	lm.rwServiceList.RLock()
 	defer lm.rwServiceList.RUnlock()
