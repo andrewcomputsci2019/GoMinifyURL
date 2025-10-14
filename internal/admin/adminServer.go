@@ -399,7 +399,7 @@ func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto
 	}
 	return resp, nil
 }
-func (s *GrpcAdminServer) DeRegisterService(cxt context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
+func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
 	if serviceNonce, err := s.leaseManager.getServiceNonce(deregMsg.InstanceName); err != nil {
 		return nil, err
 	} else {
