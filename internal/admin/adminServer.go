@@ -169,13 +169,65 @@ func (H *HTTPAdminServer) GetServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (H *HTTPAdminServer) GetServiceInfo(w http.ResponseWriter, r *http.Request, params admin.GetServiceInfoParams) {
-	//TODO implement me
-	panic("implement me")
+	serviceInfo, err := H.grpcAdminServer.leaseManager.GetServiceInfo(params.InstanceId)
+	if err != nil {
+		http.Error(w, fmt.Errorf("failed to get service [%s] info as service does not exist", params.InstanceId).Error(), http.StatusNotFound)
+		return
+	}
+
+	healthString := admin.Healthy
+	switch serviceInfo.ServiceRegInfo.serviceHealth {
+	case Healthy:
+		healthString = admin.Healthy
+	case Degraded:
+		healthString = admin.Sick
+	case Quiting:
+		healthString = admin.Quiting
+	}
+
+	// convert service info into know json data type
+	data := admin.ServiceHealth{
+		LeaseInformation: serviceInfo.lease.leaseTime,
+		Service: admin.Service{
+			Id:   serviceInfo.ServiceRegInfo.serviceId,
+			Name: serviceInfo.ServiceRegInfo.serviceName,
+			Url:  serviceInfo.ServiceRegInfo.address,
+		},
+		Status: healthString,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	jsonEncoder := json.NewEncoder(w)
+	if err := jsonEncoder.Encode(data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	return
 }
 
 func (H *HTTPAdminServer) RemoveService(w http.ResponseWriter, r *http.Request, params admin.RemoveServiceParams) {
-	//TODO implement me
-	panic("implement me")
+
+	// grab local vars needed
+	grpcServer := H.grpcAdminServer
+	// also need to get nonce
+	nonce := uint64(0)
+	nonce, err := grpcServer.leaseManager.getServiceNonce(params.Id)
+	if err != nil {
+		http.Error(w, fmt.Errorf("service: [%s] does not exist", params.Id).Error(), http.StatusNotFound)
+		return
+	}
+
+	// call into grpc layer
+	if deRegMessage, err := grpcServer.DeRegisterService(r.Context(), &proto.DeRegistrationMessage{
+		InstanceName: params.Id,
+		Nonce:        nonce,
+	}); err != nil || deRegMessage == nil || !deRegMessage.Success {
+		// failed to remove service from internal registry
+		http.Error(w, fmt.Errorf("failed to remove registered service: [%s]", params.Id).Error(), http.StatusInternalServerError)
+		return
+	} else {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 }
 
 var _ admin.ServerInterface = (*HTTPAdminServer)(nil)
