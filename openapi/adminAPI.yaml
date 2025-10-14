@@ -65,6 +65,8 @@ paths:
           description: Must be Signed In
         403:
           description: Must be an Admin to do this operation
+        500:
+          description: Server failed to remove service
 
   /serviceInfo:
     get:
@@ -85,11 +87,7 @@ paths:
               schema:
                 type: object
                 items:
-                  properties:
-                    serviceInfo:
-                      $ref: '#/components/schemas/Service'
-                    serviceHealth:
-                      $ref: '#/components/schemas/ServiceHealth'
+                  $ref: '#/components/schemas/ServiceHealth'
         '404':
           description: Unable to find service under that name
         '401':
@@ -132,20 +130,21 @@ components:
 
     ServiceHealth:
       type: object
+      required:
+        - service
+        - status
+        - leaseInformation
       properties:
-        id:
-          type: string
-          example: service-123
-        name:
-          type: string
-          example: storage-service
-          description: name of the service class
+        service:
+          $ref: '#/components/schemas/Service'
         status:
           type: string
           enum: [healthy, sick, quiting]
         leaseInformation:
           type: string
           format: date-time
+
+
 
 security:
   - keycloakOAuth: [openid, admin]
