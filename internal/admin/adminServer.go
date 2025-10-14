@@ -120,13 +120,14 @@ func NewHTTPAdminServer(addr string, grpcAdminServer *GrpcAdminServer, opts ...H
 
 func (H *HTTPAdminServer) StartAndListen() error {
 
-	return nil
+	return http.ListenAndServe(H.addr, H.handler)
 }
 
 func (H *HTTPAdminServer) GetServices(w http.ResponseWriter, r *http.Request) {
 	//TODO implement me
 	panic("implement me")
 	// todo invoke a call of the getService rpc call
+
 }
 
 func (H *HTTPAdminServer) CheckHealth(w http.ResponseWriter, r *http.Request, params admin.CheckHealthParams) {
@@ -255,7 +256,13 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 		return nil, err
 	}
 
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
+	response := &proto.RegistrationResponse{
+		Nonce:      serviceRegInfo.nonce,
+		SeqStart:   serviceRegInfo.seqNum,
+		RequestTtl: int32(s.leaseDuration.Seconds()),
+	}
+
+	return response, nil
 }
 func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartBeat, proto.HeartBeatResponse]) error {
 	// need to get service name
@@ -267,14 +274,14 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 
 	cxt, err := s.leaseManager.GetContext(msg.InstanceName)
 	if err != nil {
-		return status.Error(codes.NotFound, "instance not found")
+		return status.Error(codes.NotFound, "instance not found in lease context map")
 	}
 
-	seqNumVerrifer, err := s.leaseManager.getServiceSequenceStart(msg.InstanceName)
+	seqNumVerifier, err := s.leaseManager.getServiceSequenceStart(msg.InstanceName)
 	if err != nil {
-		return status.Error(codes.NotFound, "instance not found")
+		return status.Error(codes.NotFound, "instance not found in service lookup")
 	}
-	// todo finish work on handling updates from the client
+	prevHealth := msg.Status
 	msgChan := make(chan *proto.HeartBeat)
 	errChan := make(chan error, 1)
 	go func() {
@@ -283,8 +290,12 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 		for {
 			msg, err := stream.Recv()
 			if err != nil {
-				errChan <- status.Errorf(codes.Unknown, err.Error())
-				return
+				select {
+				case errChan <- status.Errorf(codes.Unknown, err.Error()):
+					return
+				case <-streamCxt.Done():
+					return
+				}
 			}
 			select {
 			case <-streamCxt.Done():
@@ -302,12 +313,63 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 		case <-cxt.Done():
 			return status.Error(codes.Canceled, cxt.Err().Error())
 		case <-streamCxt.Done():
-			return status.Error(codes.Canceled, cxt.Err().Error())
+			return status.Error(codes.Canceled, streamCxt.Err().Error())
+		case err = <-errChan:
+			return status.Error(codes.Unknown, err.Error())
 		case msg, ok = <-msgChan:
 			if !ok {
-				return status.Error(codes.Internal, "heartbeat failed")
+				return status.Error(codes.Canceled, "stream reader closed")
+			}
+			beat, err := s.handleServiceHeartBeat(msg, &seqNumVerifier, &prevHealth)
+			if err != nil {
+				err := stream.Send(&proto.HeartBeatResponse{
+					Feedback: &proto.HeartBeatResponse_Error{
+						Error: err.Error(),
+					},
+				})
+				if err != nil {
+					return status.Error(codes.Internal, err.Error())
+				}
+			}
+			if !beat {
+				err := stream.Send(&proto.HeartBeatResponse{
+					Feedback: &proto.HeartBeatResponse_Error{
+						Error: "Service heartbeat did not extend lease, service marked as sick",
+					},
+				})
+				if err != nil {
+					return status.Error(codes.Internal, err.Error())
+				}
 			}
 		}
+	}
+}
+
+func (s *GrpcAdminServer) handleServiceHeartBeat(msg *proto.HeartBeat, seqNum *uint64, status *NodeHealth) (bool, error) {
+	if seqNum == nil {
+		return false, nil
+	}
+	instanceName := msg.InstanceName
+	newStatus := msg.Status
+	// out of order packets something is not right
+	if msg.SeqNumber < *seqNum {
+		// old / duplicate packet
+		return false, nil
+	} else if msg.SeqNumber == *seqNum {
+		*seqNum += 1
+	} else { // jumped ahead
+		*seqNum = msg.SeqNumber + 1
+		newStatus = proto.NodeStatus_SICK
+	}
+	if err := s.leaseManager.ExtendLease(instanceName); err != nil {
+		return false, err
+	} else {
+		// update status if it is different from before
+		if newStatus != *status {
+			s.leaseManager.updateServiceHealth(instanceName, newStatus)
+			*status = newStatus
+		}
+		return true, nil
 	}
 }
 func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto.ServiceListRequest) (*proto.ServiceListResponse, error) {
@@ -316,7 +378,7 @@ func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not get service list: %v", err)
 	}
-	// dont continue if job finished during fetching of services
+	// don't continue if job finished during fetching of services
 	select {
 	case <-cxt.Done():
 		return nil, status.Error(codes.Canceled, cxt.Err().Error())

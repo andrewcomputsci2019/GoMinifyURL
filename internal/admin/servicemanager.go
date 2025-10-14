@@ -121,6 +121,14 @@ func (lm *LeaseManager) AddService(service *ServiceWithRegInfo) error {
 	return nil
 }
 
+func (lm *LeaseManager) updateServiceHealth(serviceId string, status NodeHealth) {
+	lm.rwServiceLookupMap.RLock()
+	defer lm.rwServiceLookupMap.RUnlock()
+	if data, ok := lm.serviceLookup[serviceId]; ok {
+		data.serviceHealth = status
+	}
+}
+
 func (lm *LeaseManager) ExtendLease(serviceId string) error {
 	lm.rwLeaseMap.RLock()
 	defer lm.rwLeaseMap.RUnlock()
