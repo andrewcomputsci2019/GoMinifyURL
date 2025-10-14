@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -123,14 +124,51 @@ func (H *HTTPAdminServer) StartAndListen() error {
 	return http.ListenAndServe(H.addr, H.handler)
 }
 
+func (H *HTTPAdminServer) GetServiceList(w http.ResponseWriter, r *http.Request, serviceClass string) {
+	// this is basically a wrapper around grpc call
+	list, err := H.grpcAdminServer.RequestServiceList(r.Context(), &proto.ServiceListRequest{ServiceName: serviceClass})
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	serviceList := make([]admin.Service, 0, len(list.Instances))
+	for _, instance := range list.Instances {
+		serviceList = append(serviceList, admin.Service{
+			Id:   instance.InstanceName,
+			Name: instance.ServiceName,
+			Url:  instance.DialAddr,
+		})
+	}
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(serviceList); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
+}
+
 func (H *HTTPAdminServer) GetServices(w http.ResponseWriter, r *http.Request) {
-	//TODO implement me
-	panic("implement me")
-	// todo invoke a call of the getService rpc call
+	allServices := H.grpcAdminServer.leaseManager.GetAllServices()
+	//need to convert all of this into json
+	jsonList := make([]admin.Service, 0, len(allServices))
+
+	for _, service := range allServices {
+		jsonList = append(jsonList, admin.Service{
+			Id:   service.serviceId,
+			Name: service.serviceName,
+			Url:  service.address,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	jsonEncoder := json.NewEncoder(w)
+	if err := jsonEncoder.Encode(jsonList); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
 
 }
 
-func (H *HTTPAdminServer) CheckHealth(w http.ResponseWriter, r *http.Request, params admin.CheckHealthParams) {
+func (H *HTTPAdminServer) GetServiceInfo(w http.ResponseWriter, r *http.Request, params admin.GetServiceInfoParams) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -376,7 +414,7 @@ func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto
 
 	list, err := s.leaseManager.GetServiceList(message.ServiceName)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "could not get service list: %v", err)
+		return nil, status.Errorf(codes.NotFound, "could not get service list: %v", err)
 	}
 	// don't continue if job finished during fetching of services
 	select {
