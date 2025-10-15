@@ -1,4 +1,4 @@
-package admin
+package main
 
 import (
 	"GOMinifyURL/internal/admin"
