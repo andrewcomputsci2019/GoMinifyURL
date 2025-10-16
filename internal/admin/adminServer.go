@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -80,8 +81,12 @@ func NewHTTPAdminServerWithValidationHandlers(addr string, grpcAdminServer *Grpc
 			Middlewares: append([]MiddlewareFunc(nil), server.mws...),
 		})
 	}
-	if err := loadAuthValidationMiddleWare(server, validationErrHandling...); err != nil {
-		return nil, err
+	// when testing environment is declared do not add auth
+	localTestingEnv := viper.GetBool("TESTING_ENV")
+	if localTestingEnv {
+		if err := loadAuthValidationMiddleWare(server, validationErrHandling...); err != nil {
+			return nil, err
+		}
 	}
 	return server, nil
 }
@@ -114,8 +119,12 @@ func NewHTTPAdminServer(addr string, grpcAdminServer *GrpcAdminServer, opts ...H
 			Middlewares: append([]MiddlewareFunc(nil), server.mws...),
 		})
 	}
-	if err := loadAuthValidationMiddleWare(server); err != nil {
-		return nil, err
+	// when testing environment is declared do not add auth
+	localTestingEnv := viper.GetBool("TESTING_ENV")
+	if !localTestingEnv {
+		if err := loadAuthValidationMiddleWare(server); err != nil {
+			return nil, err
+		}
 	}
 	return server, nil
 }
@@ -390,7 +399,7 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 			msg, err := stream.Recv()
 			if err != nil {
 				select {
-				case errChan <- status.Errorf(codes.Unknown, err.Error()):
+				case errChan <- status.Errorf(codes.Unknown, "%v", err):
 					return
 				case <-streamCxt.Done():
 					return
