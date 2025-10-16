@@ -79,9 +79,9 @@ tidy:
 build: build-admin
 
 build-admin:
-	@echo "=== Building Admin Executable"
+	@echo "=== Building Admin Executable ==="
 	go build -o ./bin/admin ./cmd/admin/main.go
-	@echo "=== Finished Building Admin Executable"
+	@echo "=== Finished Building Admin Executable ==="
 
 
 clean:
