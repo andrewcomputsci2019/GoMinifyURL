@@ -75,9 +75,14 @@ tidy:
 	@echo "=== Tidying Go mod ==="
 	go mod tidy
 
-build:
-	@echo "=== building executables ==="
-	#todo
+# todo add more build steps
+build: build-admin
+
+build-admin:
+	@echo "=== Building Admin Executable"
+	go build -o ./bin/admin ./cmd/admin/main.go
+	@echo "=== Finished Building Admin Executable"
+
 
 clean:
 	@echo "=== cleaning binaries ==="
