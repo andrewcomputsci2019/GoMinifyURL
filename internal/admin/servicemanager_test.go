@@ -122,14 +122,15 @@ func TestLeaseManager_GetAllServices(t *testing.T) {
 }
 
 func TestLeaseManager_LeaseAutoRemoval(t *testing.T) {
-	lm := NewLeaseManager(time.Second * 10)
+	t.Parallel()
+	lm := NewLeaseManager(time.Second * 5)
 	err := lm.AddService(&ServiceWithRegInfo{serviceName: "test-service",
 		serviceId: "1"})
 	if err != nil {
 		t.Error(fmt.Errorf("AddService failed: %v", err))
 	}
 	go func() {
-		<-time.After(time.Second * 5)
+		<-time.After(time.Second * 2)
 		err := lm.AddService(&ServiceWithRegInfo{serviceName: "test-service",
 			serviceId: "2"})
 		if err != nil {
@@ -143,7 +144,7 @@ func TestLeaseManager_LeaseAutoRemoval(t *testing.T) {
 	}
 	leaseInfo := info.lease.leaseTime
 	// a bit of a buffer but something realistic (want service to be removed before we grab the read lock)
-	<-time.After(time.Until(leaseInfo) + time.Millisecond*10)
+	<-time.After(time.Until(leaseInfo) + time.Millisecond*2)
 	_, err = lm.GetServiceInfo("1")
 	if err == nil {
 		t.Error(fmt.Errorf("service with id 1 was suppose to be removed yet was still found"))
@@ -171,7 +172,7 @@ func TestLeaseManager_GetContext(t *testing.T) {
 		t.Error(fmt.Errorf("GetContext failed to fetch context of service of id 1: %v", err))
 	}
 	go func() {
-		<-time.After(time.Second * 2)
+		<-time.After(time.Second * 1)
 		lm.RemoveServiceNonBlock("1")
 	}()
 	select {
@@ -226,7 +227,8 @@ func TestLeaseManager_GetServiceList(t *testing.T) {
 }
 
 func TestLeaseManager_ExtendLease(t *testing.T) {
-	lm := NewLeaseManager(time.Second * 10)
+	t.Parallel()
+	lm := NewLeaseManager(time.Second * 5)
 	err := lm.AddService(&ServiceWithRegInfo{
 		serviceName: "test-service",
 		serviceId:   "1",
@@ -240,7 +242,7 @@ func TestLeaseManager_ExtendLease(t *testing.T) {
 	}
 	leaseInfo := sInfo.lease.leaseTime
 	go func() {
-		<-time.After(time.Second * 5)
+		<-time.After(time.Second * 2)
 		err := lm.ExtendLease("1")
 		if err != nil {
 			t.Error(fmt.Errorf("ExtendLease failed: %v", err))
