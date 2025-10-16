@@ -3,6 +3,7 @@ package main
 import (
 	"GOMinifyURL/internal/admin"
 	"GOMinifyURL/internal/middleware/logger"
+	"GOMinifyURL/internal/utils"
 	"context"
 	"fmt"
 	"log"
@@ -32,6 +33,7 @@ func main() {
 	pflag.StringP("http_host", "h", "", "Host to bind the admin http server to")
 	pflag.IntP("http_port", "p", 8080, "Port to bind the admin http server to")
 	pflag.UintP("leaseDuration", "l", 0, "Lease duration in seconds, min value 15")
+	pflag.BoolP("mtls-enabled", "m", false, "Enable mtls mode")
 	// add middle ware logging or not
 	pflag.UintP("verbose", "v", 0, "Verbose output")
 	pflag.Parse()
@@ -44,10 +46,20 @@ func main() {
 	// needed down the line for oauth signing etc
 	viper.MustBindEnv("OIDC_ISSUER_URL")
 	viper.MustBindEnv("OIDC_CLIENT_ID")
+	if !utils.IsValidIssuerUrl(viper.GetString("OIDC_ISSUER_URL")) {
+		log.Fatalf("%s[ERROR] | %s | ODIC_ISSUER_URL is invalid or not present%s", ColorRed, time.Now().Format(time.RFC3339), ColorReset)
+		return
+	}
+	if viper.GetBool("mtls-enabled") {
+		viper.MustBindEnv("MTLS_CERT_FILE")
+		viper.MustBindEnv("MTLS_KEY_FILE")
+		viper.MustBindEnv("MTLS_CA_FILE")
+	}
 	grpcAddr := fmt.Sprintf("%s:%d", viper.GetString("grpc_host"), viper.GetInt("grpc_port"))
 	address := fmt.Sprintf("%s:%d", viper.GetString("http_host"), viper.GetInt("http_port"))
 	verbose := viper.GetUint("verbose")
 	leaseDuration := viper.GetUint("leaseDuration")
+	mtlsEnabled := viper.GetBool("mtls-enabled")
 	adminGrpcOpts := make([]admin.Option, 0)
 	if leaseDuration >= 15 {
 		adminGrpcOpts = append(adminGrpcOpts, admin.WithLeaseTimes(time.Second*time.Duration(leaseDuration)))
@@ -56,6 +68,19 @@ func main() {
 		log.Printf("%s[Warning] | %s | Parameter Lease Duration Set to less than 15 seconds defaulted to 30 seconds%s",
 			ColorYellow, currTime.Format(time.RFC3339), ColorReset)
 		leaseDuration = 30
+	}
+	if mtlsEnabled {
+		log.Printf("%s[INFO] | %s | mTLS enabled for gRPC/HTTP services%s",
+			ColorGreen, time.Now().Format(time.RFC3339), ColorReset)
+		vars := []string{"MTLS_CERT_FILE", "MTLS_KEY_FILE", "MTLS_CA_FILE"}
+		for _, key := range vars {
+			viper.MustBindEnv(key)
+			if viper.GetString(key) == "" {
+				log.Fatalf("%s[ERROR] | %s | Missing required environment variable: %s%s",
+					ColorRed, time.Now().Format(time.RFC3339), key, ColorReset)
+			}
+		}
+		adminGrpcOpts = append(adminGrpcOpts, admin.WithSecure(viper.GetString("MTLS_CERT_FILE"), viper.GetString("MTLS_KEY_FILE"), viper.GetString("MTLS_CA_FILE")))
 	}
 	log.Printf("%s[INFO] | %s | creating admin grpc server at %s%s", ColorGreen, time.Now().Format(time.RFC3339), grpcAddr, ColorReset)
 	grpcServer, err := admin.NewGrpcAdminServer(grpcAddr, adminGrpcOpts...)
