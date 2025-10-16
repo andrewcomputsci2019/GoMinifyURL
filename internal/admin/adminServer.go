@@ -34,6 +34,7 @@ type HTTPAdminServer struct {
 	grpcAdminServer *GrpcAdminServer
 	mws             []MiddlewareFunc
 	handler         http.Handler
+	server          http.Server
 }
 
 func WithMiddleWares(middleWares []MiddlewareFunc) HTTPOption {
@@ -53,7 +54,7 @@ func loadAuthValidationMiddleWare(H *HTTPAdminServer, validationErrHandling ...a
 	return nil
 }
 
-func NewHHTTPAdminServerWithValidationHandlers(addr string, grpcAdminServer *GrpcAdminServer, opts []HTTPOption, validationErrHandling ...auth.ErrorRule) (*HTTPAdminServer, error) {
+func NewHTTPAdminServerWithValidationHandlers(addr string, grpcAdminServer *GrpcAdminServer, opts []HTTPOption, validationErrHandling ...auth.ErrorRule) (*HTTPAdminServer, error) {
 	if grpcAdminServer == nil {
 		return nil, errors.New("grpcAdminServer is nil")
 	}
@@ -118,10 +119,18 @@ func NewHTTPAdminServer(addr string, grpcAdminServer *GrpcAdminServer, opts ...H
 	}
 	return server, nil
 }
-
+func (H *HTTPAdminServer) Close() error {
+	cxt, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancelFunc()
+	return H.server.Shutdown(cxt)
+}
 func (H *HTTPAdminServer) StartAndListen() error {
 
-	return http.ListenAndServe(H.addr, H.handler)
+	H.server = http.Server{
+		Addr:    H.addr,
+		Handler: H.handler,
+	}
+	return H.server.ListenAndServe()
 }
 
 func (H *HTTPAdminServer) GetServiceList(w http.ResponseWriter, r *http.Request, serviceClass string) {
@@ -501,4 +510,8 @@ func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.D
 			Success: true,
 		}, nil
 	}
+}
+
+func (s *GrpcAdminServer) Close() {
+	s.grpcServer.GracefulStop()
 }
