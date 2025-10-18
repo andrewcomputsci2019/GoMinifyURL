@@ -1,7 +1,7 @@
 package discoveryclient
 
 import (
-	"GOMinifyURL/internal/proto"
+	proto "GOMinifyURL/internal/proto/admin"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -15,11 +15,24 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
 	TtlLength = 2 * time.Minute
 )
+
+var (
+	RemovedByAdminErr = errors.New("process was removed from cluster by admin. Service should quit or at least not reconnect to the same cluster")
+	LeaseExpiryErr    = errors.New("lease expired and service was removed from the cluster")
+)
+
+type QueryClient interface {
+	GetServiceList(serviceName string) ([]Service, error)
+	GetServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error)
+	GetServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error)
+	Close() error
+}
 
 type Service struct {
 	serviceName string
@@ -105,7 +118,7 @@ func WithErrorBuffer(bufferSize int) Option {
 	}
 }
 
-func NewQueryClient(addr string, opt ...Option) (*DiscoveryClient, error) {
+func NewQueryClient(addr string, opt ...Option) (QueryClient, error) {
 	if len(addr) == 0 {
 		return nil, errors.New("discovery address is empty")
 	}
@@ -185,6 +198,10 @@ func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*Disc
 	return dClient, nil
 }
 
+func (c *DiscoveryClient) Error() <-chan error {
+	return c.errorChan
+}
+
 func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
 	c.startHeartBeatTask(cxt, service, heartbeat, seqNum)
 	c.startExpireSweep(cxt)
@@ -249,8 +266,6 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 }
 
 func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
-	// this code should run in its own go func
-	// is responsible for making sure clients receive
 	stream, err := c.client.Heartbeat(cxt)
 	defer c.wg.Done()
 	if err != nil {
@@ -259,6 +274,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 	}
 	defer stream.CloseSend()
 	stopChan := make(chan struct{})
+	// go func to read messages and log and return errors to error channel
 	go func() {
 		defer close(stopChan)
 		for {
@@ -268,9 +284,30 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			default:
 				in, err := stream.Recv()
 				if err != nil {
-					c.reportError(err)
-					return
+					st, ok := status.FromError(err)
+					if !ok {
+						c.reportError(err)
+						return
+					}
+					for _, detail := range st.Details() {
+						switch info := detail.(type) {
+						// need to know if stream was removed or just expired
+						case *proto.TerminationInfo:
+							switch info.Reason {
+							case proto.TerminationInfo_LEASE_EXPIRED:
+								c.reportError(LeaseExpiryErr)
+								return
+							case proto.TerminationInfo_REMOVED_BY_ADMIN:
+								c.reportError(RemovedByAdminErr)
+								return
+							default:
+								c.reportError(fmt.Errorf("unexpected termination information: %v", info))
+								return
+							}
+						}
+					}
 				}
+				// heartbeat specific messages Errors should be treated as terminal
 				switch fb := in.Feedback.(type) {
 				case *proto.HeartBeatResponse_Info:
 					log.Printf("Heartbeat info item received: %v", fb.Info)
@@ -284,9 +321,9 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			}
 		}
 	}()
-	// right now assume heartbeats occur on 30 second intervals
 	ticker := time.NewTicker(time.Duration(heartbeatTime) * time.Second)
 	defer ticker.Stop()
+	// send heartbeats at allotted intervals
 	for {
 		select {
 		case <-ticker.C:
@@ -300,6 +337,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 				c.reportError(err)
 				return
 			}
+		// listen for either client closing or reader closing
 		case <-cxt.Done():
 			return
 		case <-stopChan:

@@ -34,6 +34,7 @@ func main() {
 	pflag.IntP("http_port", "p", 8080, "Port to bind the admin http server to")
 	pflag.UintP("leaseDuration", "l", 0, "Lease duration in seconds, min value 15")
 	pflag.BoolP("mtls-enabled", "m", false, "Enable mtls mode")
+	pflag.BoolP("dev-environment", "dev", false, "Enable development environment disables auth etc")
 	// add middle ware logging or not
 	pflag.UintP("verbose", "v", 0, "Verbose output")
 	pflag.Parse()
@@ -43,12 +44,17 @@ func main() {
 		log.Fatal(err)
 		return
 	}
-	// needed down the line for oauth signing etc
-	viper.MustBindEnv("OIDC_ISSUER_URL")
-	viper.MustBindEnv("OIDC_CLIENT_ID")
-	if !utils.IsValidIssuerUrl(viper.GetString("OIDC_ISSUER_URL")) {
-		log.Fatalf("%s[ERROR] | %s | ODIC_ISSUER_URL is invalid or not present%s", ColorRed, time.Now().Format(time.RFC3339), ColorReset)
-		return
+	_ = viper.BindEnv("TESTING_ENV")
+	devMode := viper.GetBool("dev-environment") || viper.GetBool("TESTING_ENV")
+	if devMode {
+		viper.Set("TESTING_ENV", true)
+		// needed down the line for oauth signing etc
+		viper.MustBindEnv("OIDC_ISSUER_URL")
+		viper.MustBindEnv("OIDC_CLIENT_ID")
+		if !utils.IsValidIssuerUrl(viper.GetString("OIDC_ISSUER_URL")) {
+			log.Fatalf("%s[ERROR] | %s | ODIC_ISSUER_URL is invalid or not present%s", ColorRed, time.Now().Format(time.RFC3339), ColorReset)
+			return
+		}
 	}
 	if viper.GetBool("mtls-enabled") {
 		viper.MustBindEnv("MTLS_CERT_FILE")

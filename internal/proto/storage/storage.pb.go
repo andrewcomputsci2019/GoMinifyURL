@@ -4,7 +4,7 @@
 // 	protoc        v6.32.1
 // source: storage.proto
 
-package proto
+package storage
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -236,7 +236,7 @@ const file_storage_proto_rawDesc = "" +
 	"URLStorage\x12/\n" +
 	"\x06putURL\x12\x10.shortURLRequest\x1a\x11.shortUrlResponse\"\x00\x121\n" +
 	"\n" +
-	"getFullURL\x12\x0f.fullUrlRequest\x1a\x10.fullUrlResponse\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
+	"getFullURL\x12\x0f.fullUrlRequest\x1a\x10.fullUrlResponse\"\x00B Z\x1einternal/proto/storage;storageb\x06proto3"
 
 var (
 	file_storage_proto_rawDescOnce sync.Once

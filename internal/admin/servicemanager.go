@@ -3,10 +3,16 @@ package admin
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
+)
+
+var (
+	ErrLeaseExpired   = errors.New("lease expired")
+	ErrServiceRemoved = errors.New("service removed by admin")
 )
 
 type Lease struct {
@@ -151,8 +157,10 @@ func (lm *LeaseManager) ExtendLease(serviceId string) error {
 // can be invoked by a couple of different ways
 // one way is through lease expiry
 // another is by grpc all will be routed Through RemoveService
-func (lm *LeaseManager) cleanUpService(serviceId string) {
-
+func (lm *LeaseManager) cleanUpService(serviceId string, cause error) {
+	if cause == nil { // not sure how this would happen but still protect against it
+		cause = ErrServiceRemoved
+	}
 	lm.rwServiceLookupMap.Lock()
 	service, ok := lm.serviceLookup[serviceId]
 	if !ok {
@@ -181,7 +189,7 @@ func (lm *LeaseManager) cleanUpService(serviceId string) {
 	lease, ok := lm.leases[serviceId]
 	if ok {
 		lease.mutex.Lock()
-		lease.cancel(fmt.Errorf("service was removed [%s]", serviceId))
+		lease.cancel(cause)
 		lease.mutex.Unlock()
 		delete(lm.leases, serviceId)
 	}
@@ -285,7 +293,7 @@ func (lm *LeaseManager) Close() {
 	}
 	lm.rwServiceLookupMap.Unlock()
 	for _, id := range ids {
-		lm.cleanUpService(id)
+		lm.cleanUpService(id, ErrServiceRemoved)
 	}
 }
 
@@ -302,14 +310,20 @@ func (lm *LeaseManager) addLease(lease *Lease) {
 	})
 }
 
+func (lm *LeaseManager) removeServiceWithCause(serviceId string, cause error) {
+	lm.cleanUpService(serviceId, cause)
+}
+
+func (lm *LeaseManager) removeServiceWithCauseNonBlock(serviceId string, cause error) {
+	go lm.removeServiceWithCause(serviceId, cause)
+}
+
 func (lm *LeaseManager) RemoveService(serviceId string) {
-	lm.cleanUpService(serviceId)
+	lm.removeServiceWithCause(serviceId, ErrServiceRemoved)
 }
 
 func (lm *LeaseManager) RemoveServiceNonBlock(serviceId string) {
-	go func() {
-		lm.cleanUpService(serviceId)
-	}()
+	lm.removeServiceWithCauseNonBlock(serviceId, ErrServiceRemoved)
 }
 
 func (lm *LeaseManager) insertNewTimeoutTimer(leaseTimer *LeaseTimer) {
@@ -353,7 +367,7 @@ func (lm *LeaseManager) runLeaseExpirySweeps(cxt context.Context, leaseDuration 
 			if lease.version == next.version {
 				lease.cancel(fmt.Errorf("lease exipred, service being removed %s", next.serviceId))
 				lease.mutex.Unlock()
-				lm.RemoveServiceNonBlock(next.serviceId)
+				lm.removeServiceWithCauseNonBlock(next.serviceId, ErrLeaseExpired)
 			} else {
 				lease.mutex.Unlock()
 			}

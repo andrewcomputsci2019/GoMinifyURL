@@ -3,7 +3,7 @@ package admin
 import (
 	"GOMinifyURL/internal/api/admin"
 	"GOMinifyURL/internal/middleware/auth"
-	"GOMinifyURL/internal/proto"
+	proto "GOMinifyURL/internal/proto/admin"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -434,12 +434,34 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 			msg *proto.HeartBeat
 		)
 		select {
+		// detect context cancel of lease
 		case <-cxt.Done():
-			return status.Error(codes.Canceled, cxt.Err().Error())
+			cancelReason := context.Cause(cxt)
+			st := status.New(codes.Canceled, cancelReason.Error())
+			var errType proto.TerminationInfo_Reason
+			switch {
+			case errors.Is(cancelReason, ErrServiceRemoved):
+				errType = proto.TerminationInfo_REMOVED_BY_ADMIN
+			case errors.Is(cancelReason, ErrLeaseExpired):
+				errType = proto.TerminationInfo_LEASE_EXPIRED
+			default:
+				errType = proto.TerminationInfo_REMOVED_BY_ADMIN
+			}
+			stError, err := st.WithDetails(&proto.TerminationInfo{
+				Reason:      errType,
+				Description: st.Message(),
+			})
+			if err != nil {
+				return status.Error(codes.Canceled, cancelReason.Error())
+			}
+			return stError.Err()
+		// detect cancellation of stream context
 		case <-streamCxt.Done():
 			return status.Error(codes.Canceled, streamCxt.Err().Error())
+		// detect read error
 		case err = <-errChan:
 			return status.Error(codes.Unknown, err.Error())
+		// detect msg posted to channel
 		case msg, ok = <-msgChan:
 			if !ok {
 				return status.Error(codes.Canceled, "stream reader closed")
@@ -454,7 +476,13 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 				if err != nil {
 					return status.Error(codes.Internal, err.Error())
 				}
+				// realistically for this whole condition to actually occur
+				// the lease context would have not had its cancel function called at all
+				// which is not really possible, but for extra safety just mark as the service not found
+				// to the client
+				return status.Error(codes.NotFound, err.Error())
 			}
+			// generic warnings like out-of-order packets etc
 			if !beat {
 				err := stream.Send(&proto.HeartBeatResponse{
 					Feedback: &proto.HeartBeatResponse_Error{

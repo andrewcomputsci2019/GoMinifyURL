@@ -4,7 +4,7 @@ import "google/protobuf/empty.proto";
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "internal/proto;proto";
+option go_package = "internal/proto/storage;storage";
 
 service URLStorage {
   rpc putURL(shortURLRequest) returns (shortUrlResponse) {};

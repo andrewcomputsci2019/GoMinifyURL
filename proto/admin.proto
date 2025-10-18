@@ -2,7 +2,7 @@ syntax = 'proto3';
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "internal/proto;proto";
+option go_package = "internal/proto/admin;admin";
 
 enum NodeStatus {
   HEALTHY = 0;
@@ -71,4 +71,13 @@ service discovery {
   rpc heartbeat (stream HeartBeat) returns (stream HeartBeatResponse){};
   rpc requestServiceList(serviceListRequest) returns (serviceListResponse){};
   rpc deRegisterService(deRegistrationMessage) returns (deRegistrationResponse){};
+}
+
+message TerminationInfo {
+  enum Reason {
+    LEASE_EXPIRED = 0;
+    REMOVED_BY_ADMIN = 1;
+  }
+  Reason reason = 1;
+  string description = 2;
 }
