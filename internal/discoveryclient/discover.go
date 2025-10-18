@@ -266,8 +266,6 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 }
 
 func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
-	// this code should run in its own go func
-	// is responsible for making sure clients receive
 	stream, err := c.client.Heartbeat(cxt)
 	defer c.wg.Done()
 	if err != nil {
@@ -276,6 +274,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 	}
 	defer stream.CloseSend()
 	stopChan := make(chan struct{})
+	// go func to read messages and log and return errors to error channel
 	go func() {
 		defer close(stopChan)
 		for {
@@ -292,6 +291,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 					}
 					for _, detail := range st.Details() {
 						switch info := detail.(type) {
+						// need to know if stream was removed or just expired
 						case *proto.TerminationInfo:
 							switch info.Reason {
 							case proto.TerminationInfo_LEASE_EXPIRED:
@@ -307,6 +307,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 						}
 					}
 				}
+				// heartbeat specific messages Errors should be treated as terminal
 				switch fb := in.Feedback.(type) {
 				case *proto.HeartBeatResponse_Info:
 					log.Printf("Heartbeat info item received: %v", fb.Info)
@@ -322,6 +323,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 	}()
 	ticker := time.NewTicker(time.Duration(heartbeatTime) * time.Second)
 	defer ticker.Stop()
+	// send heartbeats at allotted intervals
 	for {
 		select {
 		case <-ticker.C:
@@ -335,6 +337,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 				c.reportError(err)
 				return
 			}
+		// listen for either client closing or reader closing
 		case <-cxt.Done():
 			return
 		case <-stopChan:
