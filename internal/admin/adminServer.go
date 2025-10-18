@@ -12,14 +12,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
 
@@ -80,8 +84,12 @@ func NewHTTPAdminServerWithValidationHandlers(addr string, grpcAdminServer *Grpc
 			Middlewares: append([]MiddlewareFunc(nil), server.mws...),
 		})
 	}
-	if err := loadAuthValidationMiddleWare(server, validationErrHandling...); err != nil {
-		return nil, err
+	// when testing environment is declared do not add auth
+	localTestingEnv := viper.GetBool("TESTING_ENV")
+	if localTestingEnv {
+		if err := loadAuthValidationMiddleWare(server, validationErrHandling...); err != nil {
+			return nil, err
+		}
 	}
 	return server, nil
 }
@@ -114,8 +122,12 @@ func NewHTTPAdminServer(addr string, grpcAdminServer *GrpcAdminServer, opts ...H
 			Middlewares: append([]MiddlewareFunc(nil), server.mws...),
 		})
 	}
-	if err := loadAuthValidationMiddleWare(server); err != nil {
-		return nil, err
+	// when testing environment is declared do not add auth
+	localTestingEnv := viper.GetBool("TESTING_ENV")
+	if !localTestingEnv {
+		if err := loadAuthValidationMiddleWare(server); err != nil {
+			return nil, err
+		}
 	}
 	return server, nil
 }
@@ -178,9 +190,9 @@ func (H *HTTPAdminServer) GetServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (H *HTTPAdminServer) GetServiceInfo(w http.ResponseWriter, r *http.Request, params admin.GetServiceInfoParams) {
-	serviceInfo, err := H.grpcAdminServer.leaseManager.GetServiceInfo(params.InstanceId)
+	serviceInfo, err := H.grpcAdminServer.leaseManager.GetServiceInfo(params.Id)
 	if err != nil {
-		http.Error(w, fmt.Errorf("failed to get service [%s] info as service does not exist", params.InstanceId).Error(), http.StatusNotFound)
+		http.Error(w, fmt.Errorf("failed to get service [%s] info as service does not exist", params.Id).Error(), http.StatusNotFound)
 		return
 	}
 
@@ -252,6 +264,7 @@ const (
 type GrpcAdminServer struct {
 	proto.UnimplementedDiscoveryServer
 	grpcServer    *grpc.Server
+	hs            *health.Server
 	tlsConfig     *tls.Config
 	address       string
 	leaseManager  *LeaseManager
@@ -321,6 +334,11 @@ func NewGrpcAdminServer(addr string, opts ...Option) (*GrpcAdminServer, error) {
 }
 
 func (s *GrpcAdminServer) ListenAndServe() error {
+
+	s.hs = health.NewServer()
+	healthpb.RegisterHealthServer(s.grpcServer, s.hs)
+	// fyi this will change if you add a package name to the proto file
+	s.hs.SetServingStatus("discovery", healthpb.HealthCheckResponse_SERVING)
 	lis, err := net.Listen("tcp", s.address)
 	if err != nil {
 		return err
@@ -364,9 +382,13 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 	return response, nil
 }
 func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartBeat, proto.HeartBeatResponse]) error {
+
 	// need to get service name
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
+	defer func() {
+		log.Printf("[HeartBeat]: handler closed stream connection with client %v", msg.InstanceName)
+	}()
 	if err != nil {
 		return status.Error(codes.Unknown, err.Error())
 	}
@@ -375,12 +397,15 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 	if err != nil {
 		return status.Error(codes.NotFound, "instance not found in lease context map")
 	}
-
 	seqNumVerifier, err := s.leaseManager.getServiceSequenceStart(msg.InstanceName)
 	if err != nil {
 		return status.Error(codes.NotFound, "instance not found in service lookup")
 	}
 	prevHealth := msg.Status
+	_, err = s.handleServiceHeartBeat(msg, &seqNumVerifier, &prevHealth)
+	if err != nil {
+		return status.Error(codes.NotFound, err.Error())
+	}
 	msgChan := make(chan *proto.HeartBeat)
 	errChan := make(chan error, 1)
 	go func() {
@@ -390,7 +415,7 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 			msg, err := stream.Recv()
 			if err != nil {
 				select {
-				case errChan <- status.Errorf(codes.Unknown, err.Error()):
+				case errChan <- status.Errorf(codes.Unknown, "%v", err):
 					return
 				case <-streamCxt.Done():
 					return
@@ -513,5 +538,6 @@ func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.D
 }
 
 func (s *GrpcAdminServer) Close() {
+	s.hs.Shutdown()
 	s.grpcServer.GracefulStop()
 }
