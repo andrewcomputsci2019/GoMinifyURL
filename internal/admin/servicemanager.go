@@ -321,7 +321,6 @@ func (lm *LeaseManager) removeServiceWithCauseNonBlock(serviceId string, cause e
 
 func (lm *LeaseManager) RemoveService(serviceId string) {
 	lm.removeServiceWithCause(serviceId, ErrServiceRemoved)
-
 }
 
 func (lm *LeaseManager) RemoveServiceNonBlock(serviceId string) {
