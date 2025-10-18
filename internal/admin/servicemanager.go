@@ -158,7 +158,6 @@ func (lm *LeaseManager) ExtendLease(serviceId string) error {
 // one way is through lease expiry
 // another is by grpc all will be routed Through RemoveService
 func (lm *LeaseManager) cleanUpService(serviceId string, cause error) {
-	// todo pass cause as context error cause
 	if cause == nil { // not sure how this would happen but still protect against it
 		cause = ErrServiceRemoved
 	}
