@@ -15,11 +15,24 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
 	TtlLength = 2 * time.Minute
 )
+
+var (
+	RemovedByAdminErr = errors.New("process was removed from cluster by admin. Service should quit or at least not reconnect to the same cluster")
+	LeaseExpiryErr    = errors.New("lease expired and service was removed from the cluster")
+)
+
+type QueryClient interface {
+	GetServiceList(serviceName string) ([]Service, error)
+	GetServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error)
+	GetServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error)
+	Close() error
+}
 
 type Service struct {
 	serviceName string
@@ -105,7 +118,7 @@ func WithErrorBuffer(bufferSize int) Option {
 	}
 }
 
-func NewQueryClient(addr string, opt ...Option) (*DiscoveryClient, error) {
+func NewQueryClient(addr string, opt ...Option) (QueryClient, error) {
 	if len(addr) == 0 {
 		return nil, errors.New("discovery address is empty")
 	}
@@ -183,6 +196,10 @@ func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*Disc
 	dClient.service.nonce = regMessage.Nonce
 	dClient.startBackGroundTask(cxt, serviceDisc, int(heartbeat), regMessage.SeqStart)
 	return dClient, nil
+}
+
+func (c *DiscoveryClient) Error() <-chan error {
+	return c.errorChan
 }
 
 func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
@@ -268,8 +285,27 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			default:
 				in, err := stream.Recv()
 				if err != nil {
-					c.reportError(err)
-					return
+					st, ok := status.FromError(err)
+					if !ok {
+						c.reportError(err)
+						return
+					}
+					for _, detail := range st.Details() {
+						switch info := detail.(type) {
+						case *proto.TerminationInfo:
+							switch info.Reason {
+							case proto.TerminationInfo_LEASE_EXPIRED:
+								c.reportError(LeaseExpiryErr)
+								return
+							case proto.TerminationInfo_REMOVED_BY_ADMIN:
+								c.reportError(RemovedByAdminErr)
+								return
+							default:
+								c.reportError(fmt.Errorf("unexpected termination information: %v", info))
+								return
+							}
+						}
+					}
 				}
 				switch fb := in.Feedback.(type) {
 				case *proto.HeartBeatResponse_Info:
@@ -284,7 +320,6 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			}
 		}
 	}()
-	// right now assume heartbeats occur on 30 second intervals
 	ticker := time.NewTicker(time.Duration(heartbeatTime) * time.Second)
 	defer ticker.Stop()
 	for {
