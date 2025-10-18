@@ -42,6 +42,7 @@ type KeycloakJWSValidator struct {
 func NewKeycloakJWSValidator(issuer string, clientID string) (*KeycloakJWSValidator, error) {
 	provider, err := oidc.NewProvider(context.Background(), issuer)
 	if err != nil {
+		log.Printf("[NewKeycloakJWSValidator]: Failed to create JWT provider for issuer: %s, %s", issuer, err)
 		return nil, err
 	}
 	verifier := provider.Verifier(&oidc.Config{
@@ -58,7 +59,7 @@ func (k *KeycloakJWSValidator) Validate(jws string) (interface{}, error) {
 	}
 	var claims map[string]interface{}
 	if err := idToken.Claims(&claims); err != nil {
-		log.Printf("Error parsing token claims: %v", err)
+		log.Printf("[KeycloakJWSValidator][Validate]: Error parsing token claims: %v", err)
 		return nil, err
 	}
 	return claims, nil
