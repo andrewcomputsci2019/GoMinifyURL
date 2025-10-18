@@ -71,6 +71,52 @@ func (NodeStatus) EnumDescriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{0}
 }
 
+type TerminationInfo_Reason int32
+
+const (
+	TerminationInfo_LEASE_EXPIRED    TerminationInfo_Reason = 0
+	TerminationInfo_REMOVED_BY_ADMIN TerminationInfo_Reason = 1
+)
+
+// Enum value maps for TerminationInfo_Reason.
+var (
+	TerminationInfo_Reason_name = map[int32]string{
+		0: "LEASE_EXPIRED",
+		1: "REMOVED_BY_ADMIN",
+	}
+	TerminationInfo_Reason_value = map[string]int32{
+		"LEASE_EXPIRED":    0,
+		"REMOVED_BY_ADMIN": 1,
+	}
+)
+
+func (x TerminationInfo_Reason) Enum() *TerminationInfo_Reason {
+	p := new(TerminationInfo_Reason)
+	*p = x
+	return p
+}
+
+func (x TerminationInfo_Reason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TerminationInfo_Reason) Descriptor() protoreflect.EnumDescriptor {
+	return file_admin_proto_enumTypes[1].Descriptor()
+}
+
+func (TerminationInfo_Reason) Type() protoreflect.EnumType {
+	return &file_admin_proto_enumTypes[1]
+}
+
+func (x TerminationInfo_Reason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TerminationInfo_Reason.Descriptor instead.
+func (TerminationInfo_Reason) EnumDescriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{9, 0}
+}
+
 type RegistrationMessage struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	ServiceName string                 `protobuf:"bytes,1,opt,name=serviceName,proto3" json:"serviceName,omitempty"`
@@ -621,6 +667,58 @@ func (x *ServiceListResponse) GetInstances() []*ServiceInfo {
 	return nil
 }
 
+type TerminationInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        TerminationInfo_Reason `protobuf:"varint,1,opt,name=reason,proto3,enum=TerminationInfo_Reason" json:"reason,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TerminationInfo) Reset() {
+	*x = TerminationInfo{}
+	mi := &file_admin_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TerminationInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TerminationInfo) ProtoMessage() {}
+
+func (x *TerminationInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_admin_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TerminationInfo.ProtoReflect.Descriptor instead.
+func (*TerminationInfo) Descriptor() ([]byte, []int) {
+	return file_admin_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TerminationInfo) GetReason() TerminationInfo_Reason {
+	if x != nil {
+		return x.Reason
+	}
+	return TerminationInfo_LEASE_EXPIRED
+}
+
+func (x *TerminationInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
 var File_admin_proto protoreflect.FileDescriptor
 
 const file_admin_proto_rawDesc = "" +
@@ -661,7 +759,13 @@ const file_admin_proto_rawDesc = "" +
 	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\x12/\n" +
 	"\flatestStatus\x18\x04 \x01(\x0e2\v.NodeStatusR\flatestStatus\"A\n" +
 	"\x13serviceListResponse\x12*\n" +
-	"\tinstances\x18\x01 \x03(\v2\f.serviceInfoR\tinstances*0\n" +
+	"\tinstances\x18\x01 \x03(\v2\f.serviceInfoR\tinstances\"\x97\x01\n" +
+	"\x0fTerminationInfo\x12/\n" +
+	"\x06reason\x18\x01 \x01(\x0e2\x17.TerminationInfo.ReasonR\x06reason\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\"1\n" +
+	"\x06Reason\x12\x11\n" +
+	"\rLEASE_EXPIRED\x10\x00\x12\x14\n" +
+	"\x10REMOVED_BY_ADMIN\x10\x01*0\n" +
 	"\n" +
 	"NodeStatus\x12\v\n" +
 	"\aHEALTHY\x10\x00\x12\b\n" +
@@ -686,39 +790,42 @@ func file_admin_proto_rawDescGZIP() []byte {
 	return file_admin_proto_rawDescData
 }
 
-var file_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_admin_proto_goTypes = []any{
 	(NodeStatus)(0),                // 0: NodeStatus
-	(*RegistrationMessage)(nil),    // 1: registrationMessage
-	(*RegistrationResponse)(nil),   // 2: registrationResponse
-	(*DeRegistrationMessage)(nil),  // 3: deRegistrationMessage
-	(*DeRegistrationResponse)(nil), // 4: deRegistrationResponse
-	(*HeartBeat)(nil),              // 5: HeartBeat
-	(*HeartBeatResponse)(nil),      // 6: HeartBeatResponse
-	(*ServiceListRequest)(nil),     // 7: serviceListRequest
-	(*ServiceInfo)(nil),            // 8: serviceInfo
-	(*ServiceListResponse)(nil),    // 9: serviceListResponse
-	(*timestamppb.Timestamp)(nil),  // 10: google.protobuf.Timestamp
+	(TerminationInfo_Reason)(0),    // 1: TerminationInfo.Reason
+	(*RegistrationMessage)(nil),    // 2: registrationMessage
+	(*RegistrationResponse)(nil),   // 3: registrationResponse
+	(*DeRegistrationMessage)(nil),  // 4: deRegistrationMessage
+	(*DeRegistrationResponse)(nil), // 5: deRegistrationResponse
+	(*HeartBeat)(nil),              // 6: HeartBeat
+	(*HeartBeatResponse)(nil),      // 7: HeartBeatResponse
+	(*ServiceListRequest)(nil),     // 8: serviceListRequest
+	(*ServiceInfo)(nil),            // 9: serviceInfo
+	(*ServiceListResponse)(nil),    // 10: serviceListResponse
+	(*TerminationInfo)(nil),        // 11: TerminationInfo
+	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
 }
 var file_admin_proto_depIdxs = []int32{
 	0,  // 0: HeartBeat.status:type_name -> NodeStatus
-	10, // 1: HeartBeatResponse.leaseExpiryTime:type_name -> google.protobuf.Timestamp
+	12, // 1: HeartBeatResponse.leaseExpiryTime:type_name -> google.protobuf.Timestamp
 	0,  // 2: serviceInfo.latestStatus:type_name -> NodeStatus
-	8,  // 3: serviceListResponse.instances:type_name -> serviceInfo
-	1,  // 4: discovery.registerService:input_type -> registrationMessage
-	5,  // 5: discovery.heartbeat:input_type -> HeartBeat
-	7,  // 6: discovery.requestServiceList:input_type -> serviceListRequest
-	3,  // 7: discovery.deRegisterService:input_type -> deRegistrationMessage
-	2,  // 8: discovery.registerService:output_type -> registrationResponse
-	6,  // 9: discovery.heartbeat:output_type -> HeartBeatResponse
-	9,  // 10: discovery.requestServiceList:output_type -> serviceListResponse
-	4,  // 11: discovery.deRegisterService:output_type -> deRegistrationResponse
-	8,  // [8:12] is the sub-list for method output_type
-	4,  // [4:8] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	9,  // 3: serviceListResponse.instances:type_name -> serviceInfo
+	1,  // 4: TerminationInfo.reason:type_name -> TerminationInfo.Reason
+	2,  // 5: discovery.registerService:input_type -> registrationMessage
+	6,  // 6: discovery.heartbeat:input_type -> HeartBeat
+	8,  // 7: discovery.requestServiceList:input_type -> serviceListRequest
+	4,  // 8: discovery.deRegisterService:input_type -> deRegistrationMessage
+	3,  // 9: discovery.registerService:output_type -> registrationResponse
+	7,  // 10: discovery.heartbeat:output_type -> HeartBeatResponse
+	10, // 11: discovery.requestServiceList:output_type -> serviceListResponse
+	5,  // 12: discovery.deRegisterService:output_type -> deRegistrationResponse
+	9,  // [9:13] is the sub-list for method output_type
+	5,  // [5:9] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_admin_proto_init() }
@@ -736,8 +843,8 @@ func file_admin_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_admin_proto_rawDesc), len(file_admin_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   9,
+			NumEnums:      2,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

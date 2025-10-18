@@ -72,3 +72,12 @@ service discovery {
   rpc requestServiceList(serviceListRequest) returns (serviceListResponse){};
   rpc deRegisterService(deRegistrationMessage) returns (deRegistrationResponse){};
 }
+
+message TerminationInfo {
+  enum Reason {
+    LEASE_EXPIRED = 0;
+    REMOVED_BY_ADMIN = 1;
+  }
+  Reason reason = 1;
+  string description = 2;
+}
