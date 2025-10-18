@@ -73,7 +73,7 @@ paths:
       summary: Check service health
       operationId: getServiceInfo
       parameters:
-        - name: instanceId
+        - name: id
           in: query
           description: ID of service to get information about
           required: true

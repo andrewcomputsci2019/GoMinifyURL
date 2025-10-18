@@ -190,9 +190,9 @@ func (H *HTTPAdminServer) GetServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (H *HTTPAdminServer) GetServiceInfo(w http.ResponseWriter, r *http.Request, params admin.GetServiceInfoParams) {
-	serviceInfo, err := H.grpcAdminServer.leaseManager.GetServiceInfo(params.InstanceId)
+	serviceInfo, err := H.grpcAdminServer.leaseManager.GetServiceInfo(params.Id)
 	if err != nil {
-		http.Error(w, fmt.Errorf("failed to get service [%s] info as service does not exist", params.InstanceId).Error(), http.StatusNotFound)
+		http.Error(w, fmt.Errorf("failed to get service [%s] info as service does not exist", params.Id).Error(), http.StatusNotFound)
 		return
 	}
 
