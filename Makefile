@@ -49,18 +49,18 @@ proto_storage: ## generates the storage protobuf/grpc stubs
 	@echo "==== Generating grpc stubs from $(PROTO_STORAGE_SRC) ======"
 	$(PROTOC) \
 		--proto_path=proto \
-		--go_out=$(PROTO_OUT) \
+		--go_out=$(PROTO_OUT)/storage \
 		--go_opt=paths=source_relative \
-		--go-grpc_out=$(PROTO_OUT) \
+		--go-grpc_out=$(PROTO_OUT)/storage \
 		--go-grpc_opt=paths=source_relative \
 		$(PROTO_STORAGE_SRC)
 proto_admin: ## generates the admin protobuf/grpc stubs
 	@echo "==== Generating grpc stubs from $(PROTO_ADMIN_SRC) ======"
 		$(PROTOC) \
 			--proto_path=proto \
-			--go_out=$(PROTO_OUT) \
+			--go_out=$(PROTO_OUT)/admin \
 			--go_opt=paths=source_relative \
-			--go-grpc_out=$(PROTO_OUT) \
+			--go-grpc_out=$(PROTO_OUT)/admin \
 			--go-grpc_opt=paths=source_relative \
 			$(PROTO_ADMIN_SRC)
 

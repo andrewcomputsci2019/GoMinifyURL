@@ -1,7 +1,7 @@
 package discoveryclient
 
 import (
-	"GOMinifyURL/internal/proto"
+	proto "GOMinifyURL/internal/proto/admin"
 	"context"
 	"crypto/tls"
 	"crypto/x509"

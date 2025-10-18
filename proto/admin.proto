@@ -2,7 +2,7 @@ syntax = 'proto3';
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "internal/proto;proto";
+option go_package = "internal/proto/admin;admin";
 
 enum NodeStatus {
   HEALTHY = 0;

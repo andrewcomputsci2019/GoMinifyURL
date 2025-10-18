@@ -3,7 +3,7 @@ package admin
 import (
 	"GOMinifyURL/internal/api/admin"
 	"GOMinifyURL/internal/middleware/auth"
-	"GOMinifyURL/internal/proto"
+	proto "GOMinifyURL/internal/proto/admin"
 	"context"
 	"crypto/rand"
 	"crypto/tls"

@@ -4,7 +4,7 @@
 // 	protoc        v6.32.1
 // source: admin.proto
 
-package proto
+package admin
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -672,7 +672,7 @@ const file_admin_proto_rawDesc = "" +
 	"\theartbeat\x12\n" +
 	".HeartBeat\x1a\x12.HeartBeatResponse\"\x00(\x010\x01\x12A\n" +
 	"\x12requestServiceList\x12\x13.serviceListRequest\x1a\x14.serviceListResponse\"\x00\x12F\n" +
-	"\x11deRegisterService\x12\x16.deRegistrationMessage\x1a\x17.deRegistrationResponse\"\x00B\x16Z\x14internal/proto;protob\x06proto3"
+	"\x11deRegisterService\x12\x16.deRegistrationMessage\x1a\x17.deRegistrationResponse\"\x00B\x1cZ\x1ainternal/proto/admin;adminb\x06proto3"
 
 var (
 	file_admin_proto_rawDescOnce sync.Once

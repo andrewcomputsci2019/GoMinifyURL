@@ -3,7 +3,7 @@ package admin
 import (
 	"GOMinifyURL/internal/api/admin"
 	"GOMinifyURL/internal/middleware/logger"
-	"GOMinifyURL/internal/proto"
+	proto "GOMinifyURL/internal/proto/admin"
 	"context"
 	"encoding/json"
 	"fmt"
