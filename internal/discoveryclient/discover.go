@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	TtlLength = 2 * time.Minute
+	TtlLength = 45 * time.Second
 )
 
 var (
