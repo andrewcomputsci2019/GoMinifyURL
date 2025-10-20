@@ -152,7 +152,9 @@ func (qw *QueryWrapper) GetServiceListAndSaveFor(serviceName string, cacheTime t
 // GetServiceListBypassRateLimit is a useful function in case an urgent refresh needs to occur (detected potential topo change)
 // without regard to the rate limit to the current service being requested. Think of host unreachable errors etc.
 func (qw *QueryWrapper) GetServiceListBypassRateLimit(serviceName string) ([]Service, error) {
-	return qw.fetchServicesFromCache(serviceName, func() ([]Service, error) { return qw.qc.GetServiceList(serviceName) })
+	// call get service with ttl requirement of 0 forcing a refresh of the cache
+	// this maybe helpful to speed up cluster convergence on startup or node failure
+	return qw.fetchServicesFromCache(serviceName, func() ([]Service, error) { return qw.qc.GetServiceListWithTTL(serviceName, 0) })
 }
 
 func (qw *QueryWrapper) fetchServicesFromCache(serviceName string, f func() ([]Service, error)) ([]Service, error) {
