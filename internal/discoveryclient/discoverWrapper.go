@@ -55,9 +55,7 @@ func QueryWrapperRateLimitDefaults(defaults QueryWrapperRateLimitOption) QueryWr
 }
 
 type QueryWrapper struct {
-	qc QueryClient
-	// todo impl interface
-	// todo fill in rate limit code and sub-cache-layer
+	qc                QueryClient
 	rwRateLimit       sync.RWMutex
 	rateLimitMap      map[string]*rate.Limiter
 	rwCache           sync.RWMutex
