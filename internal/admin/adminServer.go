@@ -370,7 +370,7 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 	}
 	err := s.leaseManager.AddService(serviceRegInfo)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
 
 	response := &proto.RegistrationResponse{

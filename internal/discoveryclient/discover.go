@@ -66,6 +66,9 @@ type DiscoveryClient struct {
 	ttl       time.Duration
 	service   *ServiceWithRegInfo
 	dialAddr  string
+	// for register function
+	cxt        context.Context
+	healthChan chan proto.NodeStatus
 }
 
 type Option func(*DiscoveryClient) error
@@ -180,24 +183,27 @@ func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*Disc
 			},
 		},
 	}
-
+	dClient.cxt = cxt
+	dClient.healthChan = make(chan proto.NodeStatus, 1)
 	for _, opt := range opts {
 		err := opt(dClient)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	regMessage, err := dClient.registerService(serviceDisc)
-	if err != nil {
-		return nil, err
-	}
-	heartbeat := regMessage.RequestTtl / 3
-	dClient.service.nonce = regMessage.Nonce
-	dClient.startBackGroundTask(cxt, serviceDisc, int(heartbeat), regMessage.SeqStart)
 	return dClient, nil
 }
 
+func (c *DiscoveryClient) Register() error {
+	regMessage, err := c.registerService(c.service.serviceDisc)
+	if err != nil {
+		return err
+	}
+	heartbeat := regMessage.RequestTtl / 3
+	c.service.nonce = regMessage.Nonce
+	c.startBackGroundTask(c.cxt, c.service.serviceDisc, int(heartbeat), regMessage.SeqStart)
+	return nil
+}
 func (c *DiscoveryClient) Error() <-chan error {
 	return c.errorChan
 }
@@ -230,6 +236,8 @@ func (c *DiscoveryClient) Close() error {
 
 func (c *DiscoveryClient) reportError(err error) {
 	select {
+	case <-c.cxt.Done():
+		return
 	case c.errorChan <- err:
 		return
 	default:
@@ -268,12 +276,15 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
 	stream, err := c.client.Heartbeat(cxt)
 	defer c.wg.Done()
+	// this allows for services that rely on this service to know that heartbeat loop has stopped
+	defer c.cancel()
 	if err != nil {
 		c.reportError(err)
 		return
 	}
 	defer stream.CloseSend()
 	stopChan := make(chan struct{})
+	nodeStatus := Healthy
 	// go func to read messages and log and return errors to error channel
 	go func() {
 		defer close(stopChan)
@@ -329,7 +340,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 		case <-ticker.C:
 			hb := &proto.HeartBeat{
 				SeqNumber:    seqNumber,
-				Status:       proto.NodeStatus_HEALTHY,
+				Status:       nodeStatus,
 				InstanceName: service.instanceId,
 			}
 			seqNumber++
@@ -340,6 +351,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 		// listen for either client closing or reader closing
 		case <-cxt.Done():
 			return
+		case nodeStatus = <-c.healthChan:
 		case <-stopChan:
 			return
 		}
@@ -377,6 +389,11 @@ func (c *DiscoveryClient) fetchServiceListAndAdd(serviceName string, cacheTTL ti
 	return fetchedList, nil
 }
 
+// GetServiceListAndSaveFor is identical to GetServiceList except it enforces a custom TTL for the
+// specified cache entry. If the service list is not cached, it fetches and stores the data with
+// the provided cacheTime as its expiry duration. If the cached entry exists but has expired, the
+// method returns the stale data immediately and asynchronously refreshes the cache using the
+// new cacheTime value. Does not change the TTL length for already cached items
 func (c *DiscoveryClient) GetServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
@@ -398,6 +415,8 @@ func (c *DiscoveryClient) GetServiceListAndSaveFor(serviceName string, cacheTime
 	return listCopy, nil
 }
 
+// GetServiceListWithTTL returns services with a freshness guarantee of inputted ttlRequirement (ttlRequirement in this context means time it has been inserted for)
+// ie if ttlRequirement is 5 seconds the data return must have been in the cache for strictly no longer than 5 seconds.
 func (c *DiscoveryClient) GetServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil || time.Now().After(res.expires) || time.Since(res.inserted) > ttlRequirement {
@@ -415,6 +434,14 @@ func (c *DiscoveryClient) GetServiceListWithTTL(serviceName string, ttlRequireme
 	return listCopy, nil
 }
 
+// GetServiceList returns a list of registered Service instances for the given serviceName.
+// It first checks the local cache for an existing entry. If the cache does not contain
+// the service list, it fetches fresh data from the discovery service, stores it in the cache,
+// and returns a copy of the result.
+//
+// If a cached entry is found but has expired, the method returns the stale data immediately
+// while asynchronously refreshing the cache in the background. All returned slices are copies.
+// Ideal usage will would be to debounce/rate-limit calls to this to avoid heavy over head repeated copying
 func (c *DiscoveryClient) GetServiceList(serviceName string) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
@@ -477,7 +504,7 @@ func (cache *serviceCache) addEntry(services []Service, expires time.Time) error
 
 func (cache *serviceCache) expireSweep(cxt context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(TtlLength)
 	defer ticker.Stop()
 	for {
 		select {
