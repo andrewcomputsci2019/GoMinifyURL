@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -376,7 +377,7 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 	response := &proto.RegistrationResponse{
 		Nonce:      serviceRegInfo.nonce,
 		SeqStart:   serviceRegInfo.seqNum,
-		RequestTtl: int32(s.leaseDuration.Seconds()),
+		RequestTtl: durationpb.New(s.leaseDuration),
 	}
 
 	return response, nil
@@ -387,7 +388,9 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
 	defer func() {
-		log.Printf("[HeartBeat]: handler closed stream connection with client %v", msg.InstanceName)
+		if msg != nil {
+			log.Printf("[HeartBeat]: handler closed stream connection with client %v", msg.InstanceName)
+		}
 	}()
 	if err != nil {
 		return status.Error(codes.Unknown, err.Error())

@@ -9,6 +9,7 @@ package admin
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -182,9 +183,9 @@ func (x *RegistrationMessage) GetDialAddr() string {
 type RegistrationResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// this time is the amount of time a service has to
-	RequestTtl    int32  `protobuf:"varint,1,opt,name=request_ttl,json=requestTtl,proto3" json:"request_ttl,omitempty"`
-	SeqStart      uint64 `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
-	Nonce         uint64 `protobuf:"varint,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	RequestTtl    *durationpb.Duration `protobuf:"bytes,1,opt,name=request_ttl,json=requestTtl,proto3" json:"request_ttl,omitempty"`
+	SeqStart      uint64               `protobuf:"varint,2,opt,name=seqStart,proto3" json:"seqStart,omitempty"`
+	Nonce         uint64               `protobuf:"varint,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,11 +220,11 @@ func (*RegistrationResponse) Descriptor() ([]byte, []int) {
 	return file_admin_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *RegistrationResponse) GetRequestTtl() int32 {
+func (x *RegistrationResponse) GetRequestTtl() *durationpb.Duration {
 	if x != nil {
 		return x.RequestTtl
 	}
-	return 0
+	return nil
 }
 
 func (x *RegistrationResponse) GetSeqStart() uint64 {
@@ -723,13 +724,13 @@ var File_admin_proto protoreflect.FileDescriptor
 
 const file_admin_proto_rawDesc = "" +
 	"\n" +
-	"\vadmin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"w\n" +
+	"\vadmin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"w\n" +
 	"\x13registrationMessage\x12 \n" +
 	"\vserviceName\x18\x01 \x01(\tR\vserviceName\x12\"\n" +
 	"\finstanceName\x18\x02 \x01(\tR\finstanceName\x12\x1a\n" +
-	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\"i\n" +
-	"\x14registrationResponse\x12\x1f\n" +
-	"\vrequest_ttl\x18\x01 \x01(\x05R\n" +
+	"\bdialAddr\x18\x03 \x01(\tR\bdialAddr\"\x84\x01\n" +
+	"\x14registrationResponse\x12:\n" +
+	"\vrequest_ttl\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\n" +
 	"requestTtl\x12\x1a\n" +
 	"\bseqStart\x18\x02 \x01(\x04R\bseqStart\x12\x14\n" +
 	"\x05nonce\x18\x03 \x01(\x04R\x05nonce\"Q\n" +
@@ -805,27 +806,29 @@ var file_admin_proto_goTypes = []any{
 	(*ServiceInfo)(nil),            // 9: serviceInfo
 	(*ServiceListResponse)(nil),    // 10: serviceListResponse
 	(*TerminationInfo)(nil),        // 11: TerminationInfo
-	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),    // 12: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),  // 13: google.protobuf.Timestamp
 }
 var file_admin_proto_depIdxs = []int32{
-	0,  // 0: HeartBeat.status:type_name -> NodeStatus
-	12, // 1: HeartBeatResponse.leaseExpiryTime:type_name -> google.protobuf.Timestamp
-	0,  // 2: serviceInfo.latestStatus:type_name -> NodeStatus
-	9,  // 3: serviceListResponse.instances:type_name -> serviceInfo
-	1,  // 4: TerminationInfo.reason:type_name -> TerminationInfo.Reason
-	2,  // 5: discovery.registerService:input_type -> registrationMessage
-	6,  // 6: discovery.heartbeat:input_type -> HeartBeat
-	8,  // 7: discovery.requestServiceList:input_type -> serviceListRequest
-	4,  // 8: discovery.deRegisterService:input_type -> deRegistrationMessage
-	3,  // 9: discovery.registerService:output_type -> registrationResponse
-	7,  // 10: discovery.heartbeat:output_type -> HeartBeatResponse
-	10, // 11: discovery.requestServiceList:output_type -> serviceListResponse
-	5,  // 12: discovery.deRegisterService:output_type -> deRegistrationResponse
-	9,  // [9:13] is the sub-list for method output_type
-	5,  // [5:9] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	12, // 0: registrationResponse.request_ttl:type_name -> google.protobuf.Duration
+	0,  // 1: HeartBeat.status:type_name -> NodeStatus
+	13, // 2: HeartBeatResponse.leaseExpiryTime:type_name -> google.protobuf.Timestamp
+	0,  // 3: serviceInfo.latestStatus:type_name -> NodeStatus
+	9,  // 4: serviceListResponse.instances:type_name -> serviceInfo
+	1,  // 5: TerminationInfo.reason:type_name -> TerminationInfo.Reason
+	2,  // 6: discovery.registerService:input_type -> registrationMessage
+	6,  // 7: discovery.heartbeat:input_type -> HeartBeat
+	8,  // 8: discovery.requestServiceList:input_type -> serviceListRequest
+	4,  // 9: discovery.deRegisterService:input_type -> deRegistrationMessage
+	3,  // 10: discovery.registerService:output_type -> registrationResponse
+	7,  // 11: discovery.heartbeat:output_type -> HeartBeatResponse
+	10, // 12: discovery.requestServiceList:output_type -> serviceListResponse
+	5,  // 13: discovery.deRegisterService:output_type -> deRegistrationResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_admin_proto_init() }

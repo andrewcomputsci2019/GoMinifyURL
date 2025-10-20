@@ -133,7 +133,7 @@ func TestGrpcAdminServer_RegisterService(t *testing.T) {
 		t.Errorf("GRPC rpc call of RegisterService failed to register service: %v", err)
 		return
 	}
-	if res.RequestTtl != int32(LeaseDuration.Seconds()) {
+	if res.RequestTtl.AsDuration() != LeaseDuration {
 		t.Errorf("Lease duration should be %v, but %v", int32(LeaseDuration.Seconds()), res.RequestTtl)
 		return
 	}
