@@ -327,3 +327,7 @@ func (drw *DiscoverRegWrapper) resolveRegNameConflict() error {
 	}
 	return fmt.Errorf("could not resolve serviceId naming conflict for serviceId %v", serviceName)
 }
+
+func (drw *DiscoverRegWrapper) Close() error {
+	return drw.dc.Close()
+}
