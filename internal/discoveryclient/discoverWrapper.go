@@ -186,6 +186,7 @@ type DiscoverRegWrapper struct {
 	onRemoval           func()
 	healthChan          chan nodeHealth
 	QW                  QueryWrapper
+	originalInstanceId  string
 }
 
 func (drw *DiscoverRegWrapper) GetDiscoverClient() *DiscoveryClient {
@@ -203,6 +204,7 @@ func defaultOnRemoval() {
 
 func defaultOnLeaseExpired(drw *DiscoverRegWrapper) {
 	serviceItem := drw.dc.service.serviceDisc
+	serviceItem.instanceId = drw.originalInstanceId
 	dc, err := NewDiscoveryClient(drw.dc.dialAddr, serviceItem, drw.ConstructionOptions...)
 	if err != nil {
 		log.Printf("[DiscoverClientWrapper][defaultOnLeaseExpired]: Error creating discover client: %v", err)
@@ -217,6 +219,7 @@ func defaultOnDisconnect(drw *DiscoverRegWrapper, err error) {
 		log.Printf("[DiscoverClientWrapper][defaultOnDisconnect]: Error that caused disconnect: %v", err)
 	}
 	serviceItem := drw.dc.service.serviceDisc
+	serviceItem.instanceId = drw.originalInstanceId
 	dc, err := NewDiscoveryClient(drw.dc.dialAddr, serviceItem, drw.ConstructionOptions...)
 	if err != nil {
 		log.Printf("[DiscoverClientWrapper][defaultOnDisconnect]: Error creating discover client: %v", err)
@@ -237,6 +240,7 @@ func NewDiscoverRegWrapper(dialAddr string, serviceDisc Service, opts ...Option)
 	drw.onDisconnect = defaultOnDisconnect
 	drw.onRemoval = defaultOnRemoval
 	drw.onLeaseExpired = defaultOnLeaseExpired
+	drw.originalInstanceId = serviceDisc.instanceId
 	return drw, nil
 }
 
@@ -319,15 +323,14 @@ func (drw *DiscoverRegWrapper) Register() {
 }
 
 func (drw *DiscoverRegWrapper) resolveRegNameConflict() error {
-	serviceName := drw.dc.service.serviceDisc.instanceId
 	for i := 1; i <= 10; i++ {
-		drw.dc.service.serviceDisc.instanceId = fmt.Sprintf("%s-%d", serviceName, i)
+		drw.dc.service.serviceDisc.instanceId = fmt.Sprintf("%s-%d", drw.originalInstanceId, i)
 		err := drw.dc.Register()
 		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("could not resolve serviceId naming conflict for serviceId %v", serviceName)
+	return fmt.Errorf("could not resolve serviceId naming conflict for serviceId %v", drw.originalInstanceId)
 }
 
 func (drw *DiscoverRegWrapper) Close() error {
