@@ -69,6 +69,7 @@ type DiscoveryClient struct {
 	// for register function
 	cxt        context.Context
 	healthChan chan proto.NodeStatus
+	closeGuard sync.Once
 }
 
 type Option func(*DiscoveryClient) error
@@ -199,22 +200,22 @@ func (c *DiscoveryClient) Register() error {
 	if err != nil {
 		return err
 	}
-	heartbeat := regMessage.RequestTtl / 3
+	heartbeat := regMessage.RequestTtl.AsDuration() / 3
 	c.service.nonce = regMessage.Nonce
-	c.startBackGroundTask(c.cxt, c.service.serviceDisc, int(heartbeat), regMessage.SeqStart)
+	c.startBackGroundTask(c.cxt, c.service.serviceDisc, heartbeat, regMessage.SeqStart)
 	return nil
 }
 func (c *DiscoveryClient) Error() <-chan error {
 	return c.errorChan
 }
 
-func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
+func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat time.Duration, seqNum uint64) {
 	c.startHeartBeatTask(cxt, service, heartbeat, seqNum)
 	c.startExpireSweep(cxt)
 
 }
 
-func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
+func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat time.Duration, seqNum uint64) {
 	c.wg.Add(1)
 	go c.heartbeatLoop(service, cxt, seqNum, heartbeat)
 }
@@ -225,13 +226,15 @@ func (c *DiscoveryClient) startExpireSweep(cxt context.Context) {
 }
 
 func (c *DiscoveryClient) Close() error {
-	c.cancel()
-	close(c.errorChan)
-	if err := c.deRegisterService(); err != nil {
-		return err
-	}
-	c.wg.Wait()
-	return c.conn.Close()
+	var err error = nil
+	c.closeGuard.Do(func() {
+		log.Printf("[DiscoveryClient]: closing discovery client")
+		c.cancel()
+		defer c.conn.Close()
+		defer close(c.errorChan)
+		err = c.deRegisterService()
+	})
+	return err
 }
 
 func (c *DiscoveryClient) reportError(err error) {
@@ -273,12 +276,13 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 	return regMessage, nil
 }
 
-func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
+func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime time.Duration) {
 	stream, err := c.client.Heartbeat(cxt)
 	defer c.wg.Done()
 	// this allows for services that rely on this service to know that heartbeat loop has stopped
 	defer c.cancel()
 	if err != nil {
+		log.Printf("discovery client failed to heartbeat: %v", err)
 		c.reportError(err)
 		return
 	}
@@ -317,6 +321,8 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 							}
 						}
 					}
+					c.reportError(err)
+					return
 				}
 				// heartbeat specific messages Errors should be treated as terminal
 				switch fb := in.Feedback.(type) {
@@ -332,7 +338,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			}
 		}
 	}()
-	ticker := time.NewTicker(time.Duration(heartbeatTime) * time.Second)
+	ticker := time.NewTicker(heartbeatTime)
 	defer ticker.Stop()
 	// send heartbeats at allotted intervals
 	for {
