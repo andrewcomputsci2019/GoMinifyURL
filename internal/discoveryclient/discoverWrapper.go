@@ -297,6 +297,9 @@ func (drw *DiscoverRegWrapper) Register() {
 				if !ok {
 					return
 				}
+				// release any channels etc. from memory are they are not needed, and close does not affect cleanup
+				// of descriptor and metadata of the object
+				_ = drw.dc.Close()
 				if errors.Is(err, RemovedByAdminErr) {
 					go drw.onRemoval()
 					return
@@ -310,7 +313,6 @@ func (drw *DiscoverRegWrapper) Register() {
 		}
 	}()
 	go func() {
-		defer close(drw.healthChan)
 		for {
 			select {
 			case health := <-drw.healthChan:
@@ -334,5 +336,6 @@ func (drw *DiscoverRegWrapper) resolveRegNameConflict() error {
 }
 
 func (drw *DiscoverRegWrapper) Close() error {
+	defer close(drw.healthChan)
 	return drw.dc.Close()
 }
