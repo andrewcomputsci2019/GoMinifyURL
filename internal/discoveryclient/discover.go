@@ -209,6 +209,10 @@ func (c *DiscoveryClient) Error() <-chan error {
 	return c.errorChan
 }
 
+func (c *DiscoveryClient) HealthChan() chan<- proto.NodeStatus {
+	return c.healthChan
+}
+
 func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat time.Duration, seqNum uint64) {
 	c.startHeartBeatTask(cxt, service, heartbeat, seqNum)
 	c.startExpireSweep(cxt)
@@ -228,7 +232,7 @@ func (c *DiscoveryClient) startExpireSweep(cxt context.Context) {
 func (c *DiscoveryClient) Close() error {
 	var err error = nil
 	c.closeGuard.Do(func() {
-		log.Printf("[DiscoveryClient]: closing discovery client")
+		log.Printf("[DiscoveryClient][Close]: closing discovery client")
 		c.cancel()
 		defer c.conn.Close()
 		defer close(c.errorChan)
@@ -244,7 +248,7 @@ func (c *DiscoveryClient) reportError(err error) {
 	case c.errorChan <- err:
 		return
 	default:
-		log.Printf("discovery client failed to report: %v", err)
+		log.Printf("[DiscoveryClient][reportError]: discovery client failed to report: %v", err)
 	}
 }
 
@@ -253,9 +257,10 @@ func (c *DiscoveryClient) deRegisterService() error {
 		return nil
 	}
 	deRegMessage := &proto.DeRegistrationMessage{
-		InstanceName: c.service.serviceDisc.serviceName,
+		InstanceName: c.service.serviceDisc.instanceId,
 		Nonce:        c.service.nonce,
 	}
+	log.Printf("[DiscoveryClient][deRegisterService]: discovery client de-registering service: %v", deRegMessage)
 	_, err := c.client.DeRegisterService(context.Background(), deRegMessage)
 	if err != nil {
 		return err
@@ -282,7 +287,6 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 	// this allows for services that rely on this service to know that heartbeat loop has stopped
 	defer c.cancel()
 	if err != nil {
-		log.Printf("discovery client failed to heartbeat: %v", err)
 		c.reportError(err)
 		return
 	}

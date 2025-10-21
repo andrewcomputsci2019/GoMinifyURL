@@ -404,7 +404,7 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 	if err != nil {
 		return status.Error(codes.NotFound, "instance not found in service lookup")
 	}
-	prevHealth := msg.Status
+	prevHealth := proto.NodeStatus_HEALTHY
 	_, err = s.handleServiceHeartBeat(msg, &seqNumVerifier, &prevHealth)
 	if err != nil {
 		return status.Error(codes.NotFound, err.Error())
