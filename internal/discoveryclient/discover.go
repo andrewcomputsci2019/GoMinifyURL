@@ -226,7 +226,7 @@ func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Servic
 
 func (c *DiscoveryClient) startExpireSweep(cxt context.Context) {
 	c.wg.Add(1)
-	go c.cache.expireSweep(cxt, &c.wg)
+	go c.cache.expireSweep(cxt, &c.wg, c.ttl)
 }
 
 func (c *DiscoveryClient) Close() error {
@@ -512,9 +512,15 @@ func (cache *serviceCache) addEntry(services []Service, expires time.Time) error
 	return nil
 }
 
-func (cache *serviceCache) expireSweep(cxt context.Context, wg *sync.WaitGroup) {
+func (cache *serviceCache) expireSweep(cxt context.Context, wg *sync.WaitGroup, interval time.Duration) {
 	defer wg.Done()
-	ticker := time.NewTicker(TtlLength)
+	interval = interval / 2
+	if interval < time.Second*2 {
+		interval = time.Second * 2
+	} else if interval > TtlLength*2 {
+		interval = TtlLength * 2
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
