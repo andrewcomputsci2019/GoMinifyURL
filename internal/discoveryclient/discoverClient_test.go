@@ -284,7 +284,261 @@ func TestDiscoveryClient_Close(t *testing.T) {
 // todo check that automatic cache eviction also works
 
 func TestNewQueryClient(t *testing.T) {
+	_, err := NewQueryClient("localhost:8083")
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	_, err = NewQueryClient("localhost:8083", WithTTL(time.Second*1))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	_, err = NewQueryClient("localhost:8083", WithErrorBuffer(1))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+}
 
+func TestQueryClient_GetServiceList(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Minute*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	QC, err := NewQueryClient(addr, WithTTL(time.Second*15))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+	}
+	defer QC.Close()
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	<-time.After(time.Millisecond * 150)
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering new discovery service item: %v", err)
+	}
+	listRes, err := QC.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(listRes) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(listRes))
+	}
+	if listRes[0].instanceId != "1" || listRes[0].serviceName != "test-service" {
+		t.Errorf("error expected service to be (\"test-service\", \"1\"). got (%v,%v)", listRes[0].serviceName, listRes[0].instanceId)
+		return
+	}
+	service, err := grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+	if err != nil || !service.GetSuccess() {
+		t.Errorf("error removing old service: %v", err)
+	}
+	listRes, err = QC.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(listRes) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(listRes))
+		return
+	}
+	if listRes[0].instanceId != "1" || listRes[0].serviceName != "test-service" {
+		t.Errorf("error expected service to be (\"test-service\", \"1\"). got (%v,%v)", listRes[0].serviceName, listRes[0].instanceId)
+		return
+	}
+}
+
+func TestQueryClient_CacheEviction(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Minute*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	QC, err := NewQueryClient(addr, WithTTL(time.Second*2))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	defer QC.Close()
+	<-time.After(time.Millisecond * 150)
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering new discovery service item: %v", err)
+	}
+	_, err = QC.GetServiceList("test-service")
+	_, err = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+	<-time.After(time.Second * 5)
+	if err != nil {
+		t.Errorf("error removing old service: %v", err)
+		return
+	}
+	backingInstance := QC.(*DiscoveryClient)
+	_, ok := backingInstance.cache.cache["test-service"]
+	if ok {
+		t.Errorf("backing instance should have been removed from cache")
+		return
+	}
+}
+
+func TestQueryClient_GetServiceListWithTTL(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Minute*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	QC, err := NewQueryClient(addr, WithTTL(time.Second*15))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	defer QC.Close()
+	<-time.After(time.Millisecond * 150)
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+
+	if err != nil {
+		t.Errorf("error registering new discovery service item: %v", err)
+	}
+
+	_, err = QC.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+
+	ok, err := grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+	if err != nil || !ok.GetSuccess() {
+		t.Errorf("error removing old service: %v", err)
+	}
+	// now call with force refresh should get an error
+	_, err = QC.GetServiceListWithTTL("test-service", time.Duration(0))
+	if err == nil {
+		t.Errorf("error should have been returned, about service does not exist")
+		return
+	}
+}
+
+func TestQueryClient_GetServiceAndSaveFor(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Minute*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	QC, err := NewQueryClient(addr, WithTTL(time.Second*2))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	defer QC.Close()
+	<-time.After(time.Millisecond * 150)
+	_, err = grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering new discovery service item: %v", err)
+		return
+	}
+	resList, err := QC.GetServiceListAndSaveFor("test-service", time.Second*4)
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(resList) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(resList))
+		return
+	}
+	if resList[0].instanceId != "1" || resList[0].serviceName != "test-service" {
+		t.Errorf("error expected service to be (\"test-service\", \"1\"). got (%v,%v)", resList[0].serviceName, resList[0].instanceId)
+		return
+	}
+	startTime := time.Now()
+	_, err = grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "2",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering new discovery service item: %v", err)
+		return
+	}
+	<-time.After(max(time.Second*2-time.Since(startTime), 0))
+	resList, err = QC.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(resList) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(resList))
+	}
+	<-time.After(5 * time.Second)
+	resList, err = QC.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(resList) != 2 {
+		t.Errorf("error expected number of services to be 2, got %v", len(resList))
+		return
+	}
+	return
 }
 
 // todo RegWrapper
