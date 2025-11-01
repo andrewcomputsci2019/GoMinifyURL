@@ -554,14 +554,14 @@ func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto
 	}
 	return resp, nil
 }
-func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
-	if serviceNonce, err := s.leaseManager.getServiceNonce(deregMsg.InstanceName); err != nil {
+func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deRegMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
+	if serviceNonce, err := s.leaseManager.getServiceNonce(deRegMsg.InstanceName); err != nil {
 		return nil, err
 	} else {
-		if serviceNonce != deregMsg.Nonce {
+		if serviceNonce != deRegMsg.Nonce {
 			return nil, status.Error(codes.FailedPrecondition, "nonce mismatch")
 		}
-		s.leaseManager.RemoveServiceNonBlock(deregMsg.InstanceName)
+		s.leaseManager.RemoveServiceNonBlock(deRegMsg.InstanceName)
 		return &proto.DeRegistrationResponse{
 			Success: true,
 		}, nil
