@@ -2,6 +2,7 @@ package discoveryclient
 
 import (
 	proto "GOMinifyURL/internal/proto/admin"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -183,10 +184,14 @@ type DiscoverRegWrapper struct {
 	ConstructionOptions []Option
 	onDisconnect        func(*DiscoverRegWrapper, error)
 	onLeaseExpired      func(*DiscoverRegWrapper)
+	onTimeOut           func(*DiscoverRegWrapper)
 	onRemoval           func()
 	healthChan          chan nodeHealth
 	QW                  QueryWrapper
 	originalInstanceId  string
+	timeOutLimit        time.Duration
+	cxt                 context.Context
+	cancel              context.CancelFunc
 }
 
 func (drw *DiscoverRegWrapper) GetDiscoverClient() *DiscoveryClient {
@@ -229,6 +234,10 @@ func defaultOnDisconnect(drw *DiscoverRegWrapper, err error) {
 	drw.Register()
 }
 
+func defaultOnTimeOut(_ *DiscoverRegWrapper) {
+	return
+}
+
 func NewDiscoverRegWrapper(dialAddr string, serviceDisc Service, opts ...Option) (*DiscoverRegWrapper, error) {
 	dc, err := NewDiscoveryClient(dialAddr, serviceDisc, opts...)
 	if err != nil {
@@ -240,7 +249,10 @@ func NewDiscoverRegWrapper(dialAddr string, serviceDisc Service, opts ...Option)
 	drw.onDisconnect = defaultOnDisconnect
 	drw.onRemoval = defaultOnRemoval
 	drw.onLeaseExpired = defaultOnLeaseExpired
+	drw.onTimeOut = defaultOnTimeOut
 	drw.originalInstanceId = serviceDisc.instanceId
+	drw.timeOutLimit = time.Minute
+	drw.cxt, drw.cancel = context.WithCancel(context.Background())
 	return drw, nil
 }
 
@@ -271,9 +283,26 @@ func (drw *DiscoverRegWrapper) AddOnRemovalCallBack(f func()) {
 	drw.onRemoval = f
 }
 
+func (drw *DiscoverRegWrapper) AddOnTimeOutCallBack(f func(*DiscoverRegWrapper)) {
+	if f == nil {
+		return
+	}
+	drw.onTimeOut = f
+}
+
+func (drw *DiscoverRegWrapper) SetRegisterTimeOutLength(duration time.Duration) {
+	if duration < time.Millisecond*500 {
+		log.Printf("[DiscoverClientWrapper] duration too small to be used as timeout: %v", duration)
+		drw.timeOutLimit = time.Millisecond * 500
+		return
+	}
+	drw.timeOutLimit = duration
+}
+
 // Register will register the service and set up the necessary error handling
 // to enable reconnection etc
 func (drw *DiscoverRegWrapper) Register() {
+	startTime := time.Now()
 	for {
 		err := drw.dc.Register()
 		if err == nil {
@@ -287,7 +316,13 @@ func (drw *DiscoverRegWrapper) Register() {
 			}
 			break
 		}
-		time.Sleep(200 * time.Millisecond)
+		log.Printf("[DiscoverClientWrapper][Register]: Error registering service (%v): %v", drw.dc.service.serviceDisc, err)
+		if time.Since(startTime) > drw.timeOutLimit {
+			log.Printf("[DiscoverClientWrapper][Register]: Timeout trying to register service, admin service unreachable")
+			go drw.onTimeOut(drw)
+			return
+		}
+		time.Sleep(500 * time.Millisecond) //sleep if packet dropped or connection errored
 	}
 	go func() {
 		errChan := drw.dc.Error()
@@ -300,6 +335,13 @@ func (drw *DiscoverRegWrapper) Register() {
 				// release any channels etc. from memory are they are not needed, and close does not affect cleanup
 				// of descriptor and metadata of the object
 				_ = drw.dc.Close()
+				select {
+				// make sure that close wasn't the reason why this error occurred; or even if a good error
+				// came through it doesn't make sense to call the other func as we have closed this resource
+				case <-drw.cxt.Done():
+					return
+				default:
+				}
 				if errors.Is(err, RemovedByAdminErr) {
 					go drw.onRemoval()
 					return
@@ -336,6 +378,7 @@ func (drw *DiscoverRegWrapper) resolveRegNameConflict() error {
 }
 
 func (drw *DiscoverRegWrapper) Close() error {
+	drw.cancel()
 	defer close(drw.healthChan)
 	return drw.dc.Close()
 }
