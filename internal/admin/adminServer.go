@@ -570,5 +570,6 @@ func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.D
 
 func (s *GrpcAdminServer) Close() {
 	s.hs.Shutdown()
+	s.leaseManager.Close()
 	s.grpcServer.GracefulStop()
 }
