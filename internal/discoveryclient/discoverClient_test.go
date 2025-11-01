@@ -11,8 +11,7 @@ import (
 	"time"
 )
 
-// todo add test for verifying discovery client functions correctly (only part left is QueryClientSide)
-// todo add test for verifying discovery client wrappers abstract correctly
+// todo add test for verifying discovery client wrappers abstract correctly (first half down)
 
 func getFreePort() (string, error) {
 	for i := 0; i < 5; i++ {
@@ -276,13 +275,6 @@ func TestDiscoveryClient_Close(t *testing.T) {
 	log.Printf("received correct error of: %v\n", err)
 }
 
-// todo QueryClient section
-// todo check getService works
-// todo check getService returns the same thing after reg another service right after the first call
-// todo check getServiceWithTTl works correctly by checking that it invalidates entries etc
-// todo check GetServiceAndSaveFor does save data for specified time
-// todo check that automatic cache eviction also works
-
 func TestNewQueryClient(t *testing.T) {
 	_, err := NewQueryClient("localhost:8083")
 	if err != nil {
@@ -541,12 +533,306 @@ func TestQueryClient_GetServiceAndSaveFor(t *testing.T) {
 	return
 }
 
-// todo RegWrapper
-// todo Verify RegWrapper handles name space collision
-// todo Verify RegWrapper allows for health update
-// todo Verify RegWrapper handles reconnection
-// todo Verify RegWrapper handles reconnection correctly (maybe this be a mock just invoke default func)
-// todo in general verify callbacks work
+func TestNewDiscoverRegWrapper(t *testing.T) {
+	_, err := NewDiscoverRegWrapper("localhost:8083", Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoveryRegWrapper: %v", err)
+		return
+	}
+	_, err = NewDiscoverRegWrapper("localhost:8083", Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	}, WithTTL(time.Second*15), WithErrorBuffer(2))
+	if err != nil {
+		t.Errorf("error creating new DiscoveryRegWrapper with extra options: %v", err)
+	}
+}
+
+func TestDiscoverRegWrapper_Register(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Second*2))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	regWrapper, err := NewDiscoverRegWrapper(addr, Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test-register",
+	}, WithTTL(time.Second*10))
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	regWrapper.AddOnDisconnectCallBack(func(_ *DiscoverRegWrapper, _ error) {
+		return
+	})
+	defer regWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	regWrapper.Register()
+	list, err := grpcAdmin.RequestServiceList(context.Background(), &proto.ServiceListRequest{
+		ServiceName: "test-service",
+	})
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list.Instances) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(list.Instances))
+		return
+	}
+	regWrapperDuplicate, err := NewDiscoverRegWrapper(addr, Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	}, WithTTL(time.Second*10))
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper for duplicate: %v", err)
+		return
+	}
+	defer regWrapperDuplicate.Close()
+	regWrapperDuplicate.AddOnDisconnectCallBack(func(_ *DiscoverRegWrapper, _ error) {
+		return
+	})
+	regWrapperDuplicate.Register()
+	list, err = grpcAdmin.RequestServiceList(context.Background(), &proto.ServiceListRequest{
+		ServiceName: "test-service",
+	})
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list.Instances) != 2 {
+		t.Errorf("error expected number of services to be 2, got %v", len(list.Instances))
+		return
+	}
+	found := false
+	for _, instance := range list.Instances {
+		if !found {
+			found = instance.InstanceName == "1-1"
+		}
+	}
+	if !found {
+		t.Errorf("error expected there to be an instance name of 1-1, but got %v", list.Instances)
+		return
+	}
+}
+
+func TestDiscoverRegWrapper_HealthChan(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Second*2))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	regWrapper, err := NewDiscoverRegWrapper(addr, Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	defer regWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	regWrapper.Register()
+	regWrapper.HealthChan() <- Degraded
+	<-time.After(time.Second * 2)
+	list, err := grpcAdmin.RequestServiceList(context.Background(), &proto.ServiceListRequest{
+		ServiceName: "test-service",
+	})
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list.Instances) != 1 {
+		t.Errorf("error expected number of services to be 1, got %v", len(list.Instances))
+		return
+	}
+	if Degraded != *(list.Instances[0].LatestStatus.Enum()) {
+		t.Errorf("error expected node status to be %v, got %v", Degraded, list.Instances[0].LatestStatus.Enum())
+		return
+	}
+}
+
+func TestDiscoverRegWrapper_CallBacks(t *testing.T) {
+	t.Parallel()
+	regWrapper, err := NewDiscoverRegWrapper("localhost:8083", Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	wasCalled := false
+	regWrapper.AddOnRemovalCallBack(func() {
+		wasCalled = true
+	})
+	regWrapper.onRemoval()
+	if !wasCalled {
+		t.Errorf("did not call onRemoval")
+		return
+	}
+	wasCalled = false
+	regWrapper.AddOnTimeOutCallBack(func(_ *DiscoverRegWrapper) {
+		wasCalled = true
+	})
+	regWrapper.onTimeOut(regWrapper)
+	if !wasCalled {
+		t.Errorf("did not call onTimeOut")
+		return
+	}
+	wasCalled = false
+	regWrapper.AddOnDisconnectCallBack(func(_ *DiscoverRegWrapper, _ error) {
+		wasCalled = true
+	})
+	regWrapper.onDisconnect(regWrapper, nil)
+	if !wasCalled {
+		t.Errorf("did not call onDisconnect")
+		return
+	}
+	wasCalled = false
+	regWrapper.AddOnLeaseExpiredCallBack(func(_ *DiscoverRegWrapper) {
+		wasCalled = true
+	})
+	regWrapper.onLeaseExpired(regWrapper)
+	if !wasCalled {
+		t.Errorf("did not call onLeaseExpired")
+		return
+	}
+}
+
+func TestDiscoverRegWrapper_TimeOut(t *testing.T) {
+	t.Parallel()
+	regWrapper, err := NewDiscoverRegWrapper("localhost:53210", Service{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	defer regWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	regWrapper.SetRegisterTimeOutLength(time.Millisecond * 500)
+	wasCalled := false
+	regWrapper.AddOnTimeOutCallBack(func(_ *DiscoverRegWrapper) {
+		wasCalled = true
+	})
+	regWrapper.Register()
+	//sleep for a little bit to make sure go routine has time to execute
+	<-time.After(time.Millisecond * 5)
+	if !wasCalled {
+		t.Errorf("did not call onTimeOut after failling to connect")
+	}
+	return
+}
+
+func TestDiscoverRegWrapper_OnRemoval(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Second*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	regWrapper, err := NewDiscoverRegWrapper(addr, Service{
+		serviceName: "test-service-on-removal",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	defer regWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	wasCalled := false
+	regWrapper.AddOnRemovalCallBack(func() {
+		wasCalled = true
+	})
+	regWrapper.Register()
+	<-time.After(time.Second * 2)
+	log.Printf("calling close on grpc server")
+	grpcAdmin.Close()
+	<-time.After(time.Millisecond * 500)
+	if !wasCalled {
+		t.Errorf("did not call onRemoval")
+		return
+	}
+}
+
+func TestDiscoverRegWrapper_OnDisconnect(t *testing.T) {
+	t.Parallel()
+	addr, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(addr, admin.WithLeaseTimes(time.Second*1))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+		return
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	regWrapper, err := NewDiscoverRegWrapper(addr, Service{
+		serviceName: "test-service-on-disconnect",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
+		return
+	}
+	defer regWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	regWrapper.onDisconnect(regWrapper, nil)
+	<-time.After(time.Second * 3)
+	list, err := grpcAdmin.RequestServiceList(context.Background(), &proto.ServiceListRequest{
+		ServiceName: "test-service-on-disconnect",
+	})
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list.Instances) != 1 {
+		t.Errorf("error getting service list")
+		return
+	}
+	if service := list.Instances[0]; service.ServiceName != "test-service-on-disconnect" || service.InstanceName != "1" {
+		t.Errorf("expected service of (%v, %v), got (%v)", service.ServiceName, service.InstanceName, list.Instances[0])
+		return
+	}
+}
 
 // todo QueryClientWrapper
 // todo Verify RegWrapper can fetch service data across all methods
