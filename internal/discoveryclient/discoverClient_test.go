@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -400,7 +401,9 @@ func TestQueryClient_CacheEviction(t *testing.T) {
 		return
 	}
 	backingInstance := QC.(*DiscoveryClient)
+	backingInstance.cache.rwLock.RLock()
 	_, ok := backingInstance.cache.cache["test-service"]
+	backingInstance.cache.rwLock.RUnlock()
 	if ok {
 		t.Errorf("backing instance should have been removed from cache")
 		return
@@ -686,39 +689,43 @@ func TestDiscoverRegWrapper_CallBacks(t *testing.T) {
 		t.Errorf("error creating new DiscoverRegWrapper: %v", err)
 		return
 	}
-	wasCalled := false
+	wasCalled := atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnRemovalCallBack(func() {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.onRemoval()
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onRemoval")
 		return
 	}
-	wasCalled = false
+	wasCalled = atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnTimeOutCallBack(func(_ *DiscoverRegWrapper) {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.onTimeOut(regWrapper)
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onTimeOut")
 		return
 	}
-	wasCalled = false
+	wasCalled = atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnDisconnectCallBack(func(_ *DiscoverRegWrapper, _ error) {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.onDisconnect(regWrapper, nil)
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onDisconnect")
 		return
 	}
-	wasCalled = false
+	wasCalled = atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnLeaseExpiredCallBack(func(_ *DiscoverRegWrapper) {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.onLeaseExpired(regWrapper)
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onLeaseExpired")
 		return
 	}
@@ -738,14 +745,15 @@ func TestDiscoverRegWrapper_TimeOut(t *testing.T) {
 	defer regWrapper.Close()
 	<-time.After(time.Millisecond * 150)
 	regWrapper.SetRegisterTimeOutLength(time.Millisecond * 500)
-	wasCalled := false
+	wasCalled := atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnTimeOutCallBack(func(_ *DiscoverRegWrapper) {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.Register()
 	//sleep for a little bit to make sure go routine has time to execute
 	<-time.After(time.Millisecond * 5)
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onTimeOut after failling to connect")
 	}
 	return
@@ -776,16 +784,17 @@ func TestDiscoverRegWrapper_OnRemoval(t *testing.T) {
 	}
 	defer regWrapper.Close()
 	<-time.After(time.Millisecond * 150)
-	wasCalled := false
+	wasCalled := atomic.Bool{}
+	wasCalled.Store(false)
 	regWrapper.AddOnRemovalCallBack(func() {
-		wasCalled = true
+		wasCalled.Store(true)
 	})
 	regWrapper.Register()
 	<-time.After(time.Second * 2)
 	log.Printf("calling close on grpc server")
 	grpcAdmin.Close()
 	<-time.After(time.Millisecond * 500)
-	if !wasCalled {
+	if !wasCalled.Load() {
 		t.Errorf("did not call onRemoval")
 		return
 	}
@@ -836,9 +845,7 @@ func TestDiscoverRegWrapper_OnDisconnect(t *testing.T) {
 }
 
 // todo QueryClientWrapper
-// todo Verify RegWrapper can fetch service data across all methods
 // todo verify RegWrapper does rate limit / debounce request
-// todo verify bypass works
 // todo verify opts work
 
 func TestNewQueryWrapper(t *testing.T) {
@@ -1156,6 +1163,161 @@ func TestQueryWrapper_RateLimit(t *testing.T) {
 	}
 	if !errors.Is(err, ErrStaleData) {
 		t.Errorf("should have returned an ErrStaleData, but error was %v", err)
+		return
+	}
+}
+
+func TestQueryWrapper_DefaultRateOpt(t *testing.T) {
+	t.Parallel()
+	qc, err := NewQueryClient("localhost:8083")
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 2,
+		reFillTime: time.Second * 5,
+	}))
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	limit := queryWrapper.getLimiter("just-a-test")
+	if limit.Burst() != 2 {
+		t.Errorf("burst should be 2 but was %v", limit.Burst())
+		return
+	}
+}
+
+func TestQueryWrapper_RateLimitPerServiceOpt(t *testing.T) {
+	t.Parallel()
+	qc, err := NewQueryClient("localhost:8083")
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	rateMap := make(map[string]QueryWrapperRateLimitOption)
+	rateMap["test-service"] = QueryWrapperRateLimitOption{
+		burstLimit: 5,
+		reFillTime: time.Second * 10,
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitPerService(rateMap))
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	limit := queryWrapper.getLimiter("test-service")
+	if limit.Burst() != 5 {
+		t.Errorf("burst should be 5 but was %v", limit.Burst())
+		return
+	}
+}
+
+func TestQueryWrapper_RateLimitStrictTest(t *testing.T) {
+	t.Parallel()
+	qc, err := NewQueryClient("localhost:8083")
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	dc, ok := qc.(*DiscoveryClient)
+	if !ok {
+		t.Errorf("error casting client to DiscoveryClient")
+		return
+	}
+	defer qc.Close()
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 1,
+	}))
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	dc.cache.addEntry([]Service{{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	}}, time.Now().Add(time.Minute))
+	_, err = queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	dc.cache.addEntry([]Service{{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	}, {
+		serviceName: "test-service",
+		instanceId:  "2",
+		serviceAddr: "just-a-test",
+	}}, time.Now().Add(time.Minute))
+	list, err := queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v. rate limit not respected", len(list))
+		return
+	}
+	<-time.After(time.Second)
+	list, err = queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 2 {
+		t.Errorf("error service list should have been size 2, but was %v", len(list))
+		return
+	}
+	dc.cache.addEntry([]Service{{
+		serviceName: "test-service",
+		instanceId:  "1",
+		serviceAddr: "just-a-test",
+	}}, time.Now().Add(time.Minute))
+	list, err = queryWrapper.GetServiceListAndSaveFor("test-service", time.Minute)
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 2 {
+		t.Errorf("error service list should have been size 2, but was %v", len(list))
+		return
+	}
+	list, err = queryWrapper.GetServiceListWithTTL("test-service", time.Millisecond)
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 2 {
+		t.Errorf("error service list should have been size 2, but was %v", len(list))
+		return
+	}
+	<-time.After(time.Second)
+	list, err = queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
+		return
+	}
+	list, err = queryWrapper.GetServiceListBypassRateLimit("test-service")
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+		return
+	}
+	if !errors.Is(err, ErrStaleData) {
+		t.Errorf("should have returned ErrStaleData, but error was %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
 		return
 	}
 }
