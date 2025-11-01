@@ -44,9 +44,10 @@ type ServiceWithRegInfo struct {
 	serviceId      string
 	serviceVersion uint
 	address        string
-	serviceHealth  NodeHealth
-	nonce          uint64
-	seqNum         uint64
+	// todo fix data race by using atomic value
+	serviceHealth NodeHealth
+	nonce         uint64
+	seqNum        uint64
 }
 
 type LeaseInfo struct {
@@ -131,6 +132,7 @@ func (lm *LeaseManager) updateServiceHealth(serviceId string, status NodeHealth)
 	lm.rwServiceLookupMap.RLock()
 	defer lm.rwServiceLookupMap.RUnlock()
 	if data, ok := lm.serviceLookup[serviceId]; ok {
+		// todo fix data race here
 		data.serviceHealth = status
 	}
 }
@@ -268,6 +270,7 @@ func (lm *LeaseManager) GetServiceList(serviceName string) ([]ServiceWithRegInfo
 	}
 	copyServices := make([]ServiceWithRegInfo, 0, len(services))
 	for _, service := range services {
+		// todo fix data race here
 		copyServices = append(copyServices, *service)
 	}
 	return copyServices, nil

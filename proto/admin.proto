@@ -1,7 +1,7 @@
 syntax = 'proto3';
 
 import "google/protobuf/timestamp.proto";
-
+import "google/protobuf/duration.proto";
 option go_package = "internal/proto/admin;admin";
 
 enum NodeStatus {
@@ -20,7 +20,7 @@ message registrationMessage {
 
 message registrationResponse{
   // this time is the amount of time a service has to
-  int32 request_ttl = 1;
+  google.protobuf.Duration request_ttl = 1;
   uint64 seqStart = 2;
   uint64 nonce = 3;
 }

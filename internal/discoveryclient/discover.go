@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	TtlLength = 2 * time.Minute
+	TtlLength = 45 * time.Second
 )
 
 var (
@@ -66,6 +66,10 @@ type DiscoveryClient struct {
 	ttl       time.Duration
 	service   *ServiceWithRegInfo
 	dialAddr  string
+	// for register function
+	cxt        context.Context
+	healthChan chan proto.NodeStatus
+	closeGuard sync.Once
 }
 
 type Option func(*DiscoveryClient) error
@@ -180,60 +184,75 @@ func NewDiscoveryClient(addr string, serviceDisc Service, opts ...Option) (*Disc
 			},
 		},
 	}
-
+	dClient.cxt = cxt
+	dClient.healthChan = make(chan proto.NodeStatus, 1)
 	for _, opt := range opts {
 		err := opt(dClient)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	regMessage, err := dClient.registerService(serviceDisc)
-	if err != nil {
-		return nil, err
-	}
-	heartbeat := regMessage.RequestTtl / 3
-	dClient.service.nonce = regMessage.Nonce
-	dClient.startBackGroundTask(cxt, serviceDisc, int(heartbeat), regMessage.SeqStart)
 	return dClient, nil
 }
 
+func (c *DiscoveryClient) Register() error {
+	regMessage, err := c.registerService(c.service.serviceDisc)
+	if err != nil {
+		return err
+	}
+	heartbeat := regMessage.RequestTtl.AsDuration() / 3
+	c.service.nonce = regMessage.Nonce
+	c.startBackGroundTask(c.cxt, c.service.serviceDisc, heartbeat, regMessage.SeqStart)
+	return nil
+}
 func (c *DiscoveryClient) Error() <-chan error {
 	return c.errorChan
 }
 
-func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
+func (c *DiscoveryClient) HealthChan() chan<- proto.NodeStatus {
+	return c.healthChan
+}
+
+func (c *DiscoveryClient) startBackGroundTask(cxt context.Context, service Service, heartbeat time.Duration, seqNum uint64) {
 	c.startHeartBeatTask(cxt, service, heartbeat, seqNum)
 	c.startExpireSweep(cxt)
 
 }
 
-func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat int, seqNum uint64) {
+func (c *DiscoveryClient) startHeartBeatTask(cxt context.Context, service Service, heartbeat time.Duration, seqNum uint64) {
 	c.wg.Add(1)
 	go c.heartbeatLoop(service, cxt, seqNum, heartbeat)
 }
 
 func (c *DiscoveryClient) startExpireSweep(cxt context.Context) {
 	c.wg.Add(1)
-	go c.cache.expireSweep(cxt, &c.wg)
+	go c.cache.expireSweep(cxt, &c.wg, c.ttl)
 }
 
 func (c *DiscoveryClient) Close() error {
-	c.cancel()
-	close(c.errorChan)
-	if err := c.deRegisterService(); err != nil {
-		return err
-	}
-	c.wg.Wait()
-	return c.conn.Close()
+	var err error = nil
+	c.closeGuard.Do(func() {
+		log.Printf("[DiscoveryClient][Close]: closing discovery client")
+		c.cancel()
+		// ideally we dont use defer here since wait group is added,
+		//and we should make sure the connection does close to prevent deadlock
+		//defer c.conn.Close()
+		defer close(c.errorChan)
+		err = c.deRegisterService()
+		_ = c.conn.Close()
+		c.wg.Wait()
+	})
+	return err
 }
 
 func (c *DiscoveryClient) reportError(err error) {
 	select {
+	case <-c.cxt.Done():
+		return
 	case c.errorChan <- err:
 		return
 	default:
-		log.Printf("discovery client failed to report: %v", err)
+		log.Printf("[DiscoveryClient][reportError]: discovery client failed to report: %v", err)
 	}
 }
 
@@ -242,9 +261,10 @@ func (c *DiscoveryClient) deRegisterService() error {
 		return nil
 	}
 	deRegMessage := &proto.DeRegistrationMessage{
-		InstanceName: c.service.serviceDisc.serviceName,
+		InstanceName: c.service.serviceDisc.instanceId,
 		Nonce:        c.service.nonce,
 	}
+	log.Printf("[DiscoveryClient][deRegisterService]: discovery client de-registering service: %v", deRegMessage)
 	_, err := c.client.DeRegisterService(context.Background(), deRegMessage)
 	if err != nil {
 		return err
@@ -265,17 +285,22 @@ func (c *DiscoveryClient) registerService(serviceDisc Service) (*proto.Registrat
 	return regMessage, nil
 }
 
-func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime int) {
+func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, seqNumber uint64, heartbeatTime time.Duration) {
 	stream, err := c.client.Heartbeat(cxt)
 	defer c.wg.Done()
+	// this allows for services that rely on this service to know that heartbeat loop has stopped
+	defer c.cancel()
 	if err != nil {
 		c.reportError(err)
 		return
 	}
 	defer stream.CloseSend()
 	stopChan := make(chan struct{})
+	nodeStatus := Healthy
 	// go func to read messages and log and return errors to error channel
 	go func() {
+		c.wg.Add(1)
+		defer c.wg.Done()
 		defer close(stopChan)
 		for {
 			select {
@@ -306,6 +331,8 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 							}
 						}
 					}
+					c.reportError(err)
+					return
 				}
 				// heartbeat specific messages Errors should be treated as terminal
 				switch fb := in.Feedback.(type) {
@@ -321,7 +348,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 			}
 		}
 	}()
-	ticker := time.NewTicker(time.Duration(heartbeatTime) * time.Second)
+	ticker := time.NewTicker(heartbeatTime)
 	defer ticker.Stop()
 	// send heartbeats at allotted intervals
 	for {
@@ -329,7 +356,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 		case <-ticker.C:
 			hb := &proto.HeartBeat{
 				SeqNumber:    seqNumber,
-				Status:       proto.NodeStatus_HEALTHY,
+				Status:       nodeStatus,
 				InstanceName: service.instanceId,
 			}
 			seqNumber++
@@ -340,6 +367,7 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 		// listen for either client closing or reader closing
 		case <-cxt.Done():
 			return
+		case nodeStatus = <-c.healthChan:
 		case <-stopChan:
 			return
 		}
@@ -377,6 +405,11 @@ func (c *DiscoveryClient) fetchServiceListAndAdd(serviceName string, cacheTTL ti
 	return fetchedList, nil
 }
 
+// GetServiceListAndSaveFor is identical to GetServiceList except it enforces a custom TTL for the
+// specified cache entry. If the service list is not cached, it fetches and stores the data with
+// the provided cacheTime as its expiry duration. If the cached entry exists but has expired, the
+// method returns the stale data immediately and asynchronously refreshes the cache using the
+// new cacheTime value. Does not change the TTL length for already cached items
 func (c *DiscoveryClient) GetServiceListAndSaveFor(serviceName string, cacheTime time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
@@ -398,6 +431,8 @@ func (c *DiscoveryClient) GetServiceListAndSaveFor(serviceName string, cacheTime
 	return listCopy, nil
 }
 
+// GetServiceListWithTTL returns services with a freshness guarantee of inputted ttlRequirement (ttlRequirement in this context means time it has been inserted for)
+// ie if ttlRequirement is 5 seconds the data return must have been in the cache for strictly no longer than 5 seconds.
 func (c *DiscoveryClient) GetServiceListWithTTL(serviceName string, ttlRequirement time.Duration) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil || time.Now().After(res.expires) || time.Since(res.inserted) > ttlRequirement {
@@ -415,6 +450,14 @@ func (c *DiscoveryClient) GetServiceListWithTTL(serviceName string, ttlRequireme
 	return listCopy, nil
 }
 
+// GetServiceList returns a list of registered Service instances for the given serviceName.
+// It first checks the local cache for an existing entry. If the cache does not contain
+// the service list, it fetches fresh data from the discovery service, stores it in the cache,
+// and returns a copy of the result.
+//
+// If a cached entry is found but has expired, the method returns the stale data immediately
+// while asynchronously refreshing the cache in the background. All returned slices are copies.
+// Ideal usage will would be to debounce/rate-limit calls to this to avoid heavy over head repeated copying
 func (c *DiscoveryClient) GetServiceList(serviceName string) ([]Service, error) {
 	res := c.cache.getEntry(serviceName)
 	if res == nil {
@@ -475,9 +518,15 @@ func (cache *serviceCache) addEntry(services []Service, expires time.Time) error
 	return nil
 }
 
-func (cache *serviceCache) expireSweep(cxt context.Context, wg *sync.WaitGroup) {
+func (cache *serviceCache) expireSweep(cxt context.Context, wg *sync.WaitGroup, interval time.Duration) {
 	defer wg.Done()
-	ticker := time.NewTicker(2 * time.Minute)
+	interval = interval / 2
+	if interval < time.Second*2 {
+		interval = time.Second * 2
+	} else if interval > TtlLength*2 {
+		interval = TtlLength * 2
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -370,13 +371,13 @@ func (s *GrpcAdminServer) RegisterService(cxt context.Context, regMsg *proto.Reg
 	}
 	err := s.leaseManager.AddService(serviceRegInfo)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
 
 	response := &proto.RegistrationResponse{
 		Nonce:      serviceRegInfo.nonce,
 		SeqStart:   serviceRegInfo.seqNum,
-		RequestTtl: int32(s.leaseDuration.Seconds()),
+		RequestTtl: durationpb.New(s.leaseDuration),
 	}
 
 	return response, nil
@@ -387,7 +388,9 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 	streamCxt := stream.Context()
 	msg, err := stream.Recv()
 	defer func() {
-		log.Printf("[HeartBeat]: handler closed stream connection with client %v", msg.InstanceName)
+		if msg != nil {
+			log.Printf("[HeartBeat]: handler closed stream connection with client %v", msg.InstanceName)
+		}
 	}()
 	if err != nil {
 		return status.Error(codes.Unknown, err.Error())
@@ -401,7 +404,7 @@ func (s *GrpcAdminServer) Heartbeat(stream grpc.BidiStreamingServer[proto.HeartB
 	if err != nil {
 		return status.Error(codes.NotFound, "instance not found in service lookup")
 	}
-	prevHealth := msg.Status
+	prevHealth := proto.NodeStatus_HEALTHY
 	_, err = s.handleServiceHeartBeat(msg, &seqNumVerifier, &prevHealth)
 	if err != nil {
 		return status.Error(codes.NotFound, err.Error())
@@ -551,14 +554,14 @@ func (s *GrpcAdminServer) RequestServiceList(cxt context.Context, message *proto
 	}
 	return resp, nil
 }
-func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
-	if serviceNonce, err := s.leaseManager.getServiceNonce(deregMsg.InstanceName); err != nil {
+func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deRegMsg *proto.DeRegistrationMessage) (*proto.DeRegistrationResponse, error) {
+	if serviceNonce, err := s.leaseManager.getServiceNonce(deRegMsg.InstanceName); err != nil {
 		return nil, err
 	} else {
-		if serviceNonce != deregMsg.Nonce {
+		if serviceNonce != deRegMsg.Nonce {
 			return nil, status.Error(codes.FailedPrecondition, "nonce mismatch")
 		}
-		s.leaseManager.RemoveServiceNonBlock(deregMsg.InstanceName)
+		s.leaseManager.RemoveServiceNonBlock(deRegMsg.InstanceName)
 		return &proto.DeRegistrationResponse{
 			Success: true,
 		}, nil
@@ -567,5 +570,6 @@ func (s *GrpcAdminServer) DeRegisterService(_ context.Context, deregMsg *proto.D
 
 func (s *GrpcAdminServer) Close() {
 	s.hs.Shutdown()
+	s.leaseManager.Close()
 	s.grpcServer.GracefulStop()
 }
