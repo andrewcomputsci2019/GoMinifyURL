@@ -4,6 +4,7 @@ import (
 	"GOMinifyURL/internal/admin"
 	proto "GOMinifyURL/internal/proto/admin"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -839,3 +840,322 @@ func TestDiscoverRegWrapper_OnDisconnect(t *testing.T) {
 // todo verify RegWrapper does rate limit / debounce request
 // todo verify bypass works
 // todo verify opts work
+
+func TestNewQueryWrapper(t *testing.T) {
+	qc, err := NewQueryClient("localhost:8083", WithTTL(time.Second*45))
+	_, err = NewQueryWrapper(qc)
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	_, err = NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+	rateMap := make(map[string]QueryWrapperRateLimitOption)
+	rateMap["test-service"] = QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 10,
+	}
+	_, err = NewQueryWrapper(qc, QueryWrapperRateLimitPerService(rateMap))
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+}
+
+func TestQueryWrapper_GetServiceList(t *testing.T) {
+	t.Parallel()
+	port, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(port, admin.WithLeaseTimes(time.Second*25))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	qc, err := NewQueryClient(port, WithTTL(time.Second*45))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	_, err = queryWrapper.GetServiceList("test-service")
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+	}
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering service: %v", err)
+		return
+	}
+	list, err := queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
+		return
+	}
+	_, _ = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+}
+
+func TestQueryWrapper_GetServiceListWithTTL(t *testing.T) {
+	t.Parallel()
+	port, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(port, admin.WithLeaseTimes(time.Second*25))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	qc, err := NewQueryClient(port, WithTTL(time.Second*45))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	_, err = queryWrapper.GetServiceListWithTTL("test-service", time.Second*5)
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+	}
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering service: %v", err)
+		return
+	}
+	list, err := queryWrapper.GetServiceListWithTTL("test-service", time.Second*5)
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
+		return
+	}
+	_, _ = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+}
+
+func TestQueryWrapper_GetServiceListAndSaveFor(t *testing.T) {
+	t.Parallel()
+	port, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(port, admin.WithLeaseTimes(time.Second*25))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	qc, err := NewQueryClient(port, WithTTL(time.Second*45))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	_, err = queryWrapper.GetServiceListAndSaveFor("test-service", time.Second*5)
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+	}
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering service: %v", err)
+		return
+	}
+	list, err := queryWrapper.GetServiceListAndSaveFor("test-service", time.Second*5)
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
+		return
+	}
+	_, _ = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+}
+
+func TestQueryWrapper_GetServiceListBypassRateLimit(t *testing.T) {
+	t.Parallel()
+	port, err := getFreePort()
+	if err != nil {
+		t.Errorf("error getting free port: %v", err)
+		return
+	}
+	grpcAdmin, err := admin.NewGrpcAdminServer(port, admin.WithLeaseTimes(time.Second*25))
+	if err != nil {
+		t.Errorf("error creating grpc admin server: %v", err)
+	}
+	go grpcAdmin.ListenAndServe()
+	defer grpcAdmin.Close()
+	qc, err := NewQueryClient(port, WithTTL(time.Second*45))
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	defer queryWrapper.Close()
+	<-time.After(time.Millisecond * 150)
+	_, err = queryWrapper.GetServiceList("test-service")
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+	}
+	res, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "1",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering service: %v", err)
+		return
+	}
+	list, err := queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 1 {
+		t.Errorf("error service list should have been size 1, but was %v", len(list))
+		return
+	}
+	res2, err := grpcAdmin.RegisterService(context.Background(), &proto.RegistrationMessage{
+		ServiceName:  "test-service",
+		InstanceName: "2",
+		DialAddr:     "just-a-test",
+	})
+	if err != nil {
+		t.Errorf("error registering service: %v", err)
+		return
+	}
+	list, err = queryWrapper.GetServiceListBypassRateLimit("test-service")
+	if err != nil {
+		t.Errorf("error getting service list: %v", err)
+		return
+	}
+	if len(list) != 2 {
+		t.Errorf("error service list should have been size 2, but was %v", len(list))
+		return
+	}
+	_, _ = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "2",
+		Nonce:        res2.Nonce,
+	})
+	_, _ = grpcAdmin.DeRegisterService(context.Background(), &proto.DeRegistrationMessage{
+		InstanceName: "1",
+		Nonce:        res.Nonce,
+	})
+}
+
+func TestQueryWrapper_RateLimit(t *testing.T) {
+	t.Parallel()
+	qc, err := NewQueryClient("localhost:8083")
+	if err != nil {
+		t.Errorf("error creating new query client: %v", err)
+		return
+	}
+	queryWrapper, err := NewQueryWrapper(qc, QueryWrapperRateLimitDefaults(QueryWrapperRateLimitOption{
+		burstLimit: 1,
+		reFillTime: time.Second * 5,
+	}))
+	if err != nil {
+		t.Errorf("error creating new QueryWrapper: %v", err)
+		return
+	}
+	_, err = queryWrapper.GetServiceList("test-service")
+	if err == nil {
+		t.Errorf("should have returned an error, but error was nil")
+		return
+	}
+	queryWrapper.rwCache.Lock()
+	queryWrapper.subCache["test-service"] = []Service{
+		{
+			serviceName: "test-service",
+			instanceId:  "1",
+			serviceAddr: "just-a-test",
+		},
+	}
+	queryWrapper.rwCache.Unlock()
+	// now we check if we can get this which we should since it's in the sub cache and rate limit shouldn't allow a fetch
+	_, err = queryWrapper.GetServiceList("test-service")
+	if err != nil {
+		t.Errorf("should have returned an item, but returned an error: %v", err)
+		return
+	}
+	_, err = queryWrapper.GetServiceListBypassRateLimit("test-service")
+	if err == nil {
+		t.Errorf("should have returned an error as we should have bypass the sub cache, but error was nil")
+		return
+	}
+	if !errors.Is(err, ErrStaleData) {
+		t.Errorf("should have returned an ErrStaleData, but error was %v", err)
+		return
+	}
+}
