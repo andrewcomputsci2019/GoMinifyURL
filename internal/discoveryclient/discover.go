@@ -234,9 +234,13 @@ func (c *DiscoveryClient) Close() error {
 	c.closeGuard.Do(func() {
 		log.Printf("[DiscoveryClient][Close]: closing discovery client")
 		c.cancel()
-		defer c.conn.Close()
+		// ideally we dont use defer here since wait group is added,
+		//and we should make sure the connection does close to prevent deadlock
+		//defer c.conn.Close()
 		defer close(c.errorChan)
 		err = c.deRegisterService()
+		_ = c.conn.Close()
+		c.wg.Wait()
 	})
 	return err
 }
@@ -295,6 +299,8 @@ func (c *DiscoveryClient) heartbeatLoop(service Service, cxt context.Context, se
 	nodeStatus := Healthy
 	// go func to read messages and log and return errors to error channel
 	go func() {
+		c.wg.Add(1)
+		defer c.wg.Done()
 		defer close(stopChan)
 		for {
 			select {
