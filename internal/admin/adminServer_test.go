@@ -405,7 +405,6 @@ func TestHttpAdminServer_StartAndListenAndClose(t *testing.T) {
 		t.Errorf("GetFreePort() error = %v", err)
 		return
 	}
-	defer grpcServer.Close()
 	httpServer, err := NewHTTPAdminServer(addr, grpcServer, WithMiddleWares([]MiddlewareFunc{logger.LoggingMiddleware()}))
 	if err != nil {
 		t.Errorf("NewHTTPAdminServer() error = %v", err)
