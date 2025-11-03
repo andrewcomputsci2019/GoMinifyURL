@@ -109,7 +109,7 @@ func (lm *LeaseManager) AddService(service *ServiceWithRegInfo) error {
 		nonce:          service.nonce,
 		seqNum:         service.seqNum,
 	}
-	copyService.serviceHealth.Store(service.serviceHealth)
+	copyService.serviceHealth.Store(int32(service.serviceHealth))
 	lm.serviceLookup[copyService.serviceId] = copyService
 	lm.rwServiceLookupMap.Unlock()
 
@@ -143,7 +143,7 @@ func (lm *LeaseManager) updateServiceHealth(serviceId string, status NodeHealth)
 	lm.rwServiceLookupMap.RLock()
 	defer lm.rwServiceLookupMap.RUnlock()
 	if data, ok := lm.serviceLookup[serviceId]; ok {
-		data.serviceHealth.Store(status)
+		data.serviceHealth.Store(int32(status))
 	}
 }
 
@@ -251,7 +251,7 @@ func (lm *LeaseManager) GetServiceInfo(serviceId string) (ServiceInstanceSpecifi
 			serviceId:      service.serviceId,
 			serviceVersion: service.serviceVersion,
 			address:        service.address,
-			serviceHealth:  service.serviceHealth.Load(),
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
 			nonce:          service.nonce,
 			seqNum:         service.seqNum,
 		},
@@ -273,7 +273,7 @@ func (lm *LeaseManager) GetAllServices() []ServiceWithRegInfo {
 			serviceId:      service.serviceId,
 			serviceVersion: service.serviceVersion,
 			address:        service.address,
-			serviceHealth:  service.serviceHealth.Load(),
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
 		})
 	}
 	return services
@@ -293,7 +293,7 @@ func (lm *LeaseManager) GetServiceList(serviceName string) ([]ServiceWithRegInfo
 			serviceId:      service.serviceId,
 			serviceVersion: service.serviceVersion,
 			address:        service.address,
-			serviceHealth:  service.serviceHealth.Load(),
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
 			nonce:          service.nonce,
 			seqNum:         service.seqNum,
 		})
