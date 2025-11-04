@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	_ "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"golang.org/x/oauth2"
 )
