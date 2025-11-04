@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,8 +30,8 @@ type LeaseManager struct {
 	leases             map[string]*Lease
 	leaseHeap          LeaseTimerHeap
 	cancelFunc         context.CancelFunc
-	serviceListMap     map[string][]*ServiceWithRegInfo
-	serviceLookup      map[string]*ServiceWithRegInfo
+	serviceListMap     map[string][]*serviceWithRegInfo
+	serviceLookup      map[string]*serviceWithRegInfo
 	contextMap         map[string]context.Context
 	rwServiceLookupMap sync.RWMutex
 	rwServiceList      sync.RWMutex
@@ -44,10 +45,20 @@ type ServiceWithRegInfo struct {
 	serviceId      string
 	serviceVersion uint
 	address        string
-	// todo fix data race by using atomic value
-	serviceHealth NodeHealth
-	nonce         uint64
-	seqNum        uint64
+	serviceHealth  NodeHealth
+	nonce          uint64
+	seqNum         uint64
+}
+
+// internal type that prevents race conditions by using atomics for changing health status
+type serviceWithRegInfo struct {
+	serviceName    string
+	serviceId      string
+	serviceVersion uint
+	address        string
+	serviceHealth  atomic.Int32
+	nonce          uint64
+	seqNum         uint64
 }
 
 type LeaseInfo struct {
@@ -70,8 +81,8 @@ func NewLeaseManager(leaseTTL time.Duration) *LeaseManager {
 	cxt, cancel := context.WithCancel(context.Background())
 	lm.cancelFunc = cancel
 	lm.leaseDuration = leaseTTL
-	lm.serviceListMap = make(map[string][]*ServiceWithRegInfo)
-	lm.serviceLookup = make(map[string]*ServiceWithRegInfo)
+	lm.serviceListMap = make(map[string][]*serviceWithRegInfo)
+	lm.serviceLookup = make(map[string]*serviceWithRegInfo)
 	lm.contextMap = make(map[string]context.Context)
 	lm.rwServiceList = sync.RWMutex{}
 	lm.rwServiceLookupMap = sync.RWMutex{}
@@ -89,16 +100,16 @@ func (lm *LeaseManager) AddService(service *ServiceWithRegInfo) error {
 		return fmt.Errorf("service %s already exists", service.serviceId)
 	}
 
-	copyService := &ServiceWithRegInfo{
+	copyService := &serviceWithRegInfo{
 		serviceName:    service.serviceName,
 		serviceId:      service.serviceId,
 		serviceVersion: service.serviceVersion,
 		address:        service.address,
-		serviceHealth:  service.serviceHealth,
+		serviceHealth:  atomic.Int32{},
 		nonce:          service.nonce,
 		seqNum:         service.seqNum,
 	}
-
+	copyService.serviceHealth.Store(int32(service.serviceHealth))
 	lm.serviceLookup[copyService.serviceId] = copyService
 	lm.rwServiceLookupMap.Unlock()
 
@@ -132,8 +143,7 @@ func (lm *LeaseManager) updateServiceHealth(serviceId string, status NodeHealth)
 	lm.rwServiceLookupMap.RLock()
 	defer lm.rwServiceLookupMap.RUnlock()
 	if data, ok := lm.serviceLookup[serviceId]; ok {
-		// todo fix data race here
-		data.serviceHealth = status
+		data.serviceHealth.Store(int32(status))
 	}
 }
 
@@ -174,7 +184,7 @@ func (lm *LeaseManager) cleanUpService(serviceId string, cause error) {
 
 	lm.rwServiceList.Lock()
 	if regList, ok := lm.serviceListMap[service.serviceName]; ok {
-		lm.serviceListMap[service.serviceName] = slices.DeleteFunc(regList, func(item *ServiceWithRegInfo) bool {
+		lm.serviceListMap[service.serviceName] = slices.DeleteFunc(regList, func(item *serviceWithRegInfo) bool {
 			return item.serviceId == serviceId
 		})
 		if len(lm.serviceListMap[service.serviceName]) == 0 {
@@ -236,7 +246,15 @@ func (lm *LeaseManager) GetServiceInfo(serviceId string) (ServiceInstanceSpecifi
 	lease.mutex.Lock()
 	defer lease.mutex.Unlock()
 	return ServiceInstanceSpecificData{
-		ServiceRegInfo: *service,
+		ServiceRegInfo: ServiceWithRegInfo{
+			serviceName:    service.serviceName,
+			serviceId:      service.serviceId,
+			serviceVersion: service.serviceVersion,
+			address:        service.address,
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
+			nonce:          service.nonce,
+			seqNum:         service.seqNum,
+		},
 		lease: LeaseInfo{
 			leaseTime:     lease.lease,
 			leaseDuration: lease.ttl,
@@ -255,7 +273,7 @@ func (lm *LeaseManager) GetAllServices() []ServiceWithRegInfo {
 			serviceId:      service.serviceId,
 			serviceVersion: service.serviceVersion,
 			address:        service.address,
-			serviceHealth:  service.serviceHealth,
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
 		})
 	}
 	return services
@@ -270,8 +288,15 @@ func (lm *LeaseManager) GetServiceList(serviceName string) ([]ServiceWithRegInfo
 	}
 	copyServices := make([]ServiceWithRegInfo, 0, len(services))
 	for _, service := range services {
-		// todo fix data race here
-		copyServices = append(copyServices, *service)
+		copyServices = append(copyServices, ServiceWithRegInfo{
+			serviceName:    service.serviceName,
+			serviceId:      service.serviceId,
+			serviceVersion: service.serviceVersion,
+			address:        service.address,
+			serviceHealth:  NodeHealth(service.serviceHealth.Load()),
+			nonce:          service.nonce,
+			seqNum:         service.seqNum,
+		})
 	}
 	return copyServices, nil
 }

@@ -405,7 +405,6 @@ func TestHttpAdminServer_StartAndListenAndClose(t *testing.T) {
 		t.Errorf("GetFreePort() error = %v", err)
 		return
 	}
-	defer grpcServer.Close()
 	httpServer, err := NewHTTPAdminServer(addr, grpcServer, WithMiddleWares([]MiddlewareFunc{logger.LoggingMiddleware()}))
 	if err != nil {
 		t.Errorf("NewHTTPAdminServer() error = %v", err)
@@ -419,7 +418,7 @@ func TestHttpAdminServer_StartAndListenAndClose(t *testing.T) {
 	go func() {
 		_ = httpServer.StartAndListen()
 	}()
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	res, err := http.Get("http://" + addr + "/api_admin/getServices")
 	if err != nil {
 		t.Errorf("Http Server may not be serving content")
