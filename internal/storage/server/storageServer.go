@@ -3,6 +3,7 @@ package server
 import (
 	proto "GOMinifyURL/internal/proto/storage"
 	"context"
+	_ "log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
